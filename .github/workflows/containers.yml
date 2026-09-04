@@ -93,9 +93,11 @@ jobs:
             release_tag=$(printf '%s' '${{ inputs.release_version }}' | tr '~' '-')
             installed="$installed,ghcr.io/$owner/usbradioplus-debian${{ matrix.debian }}:$release_tag-$suffix"
           fi
-          echo "clean=$clean" >> "$GITHUB_OUTPUT"
-          echo "quality=$quality" >> "$GITHUB_OUTPUT"
-          echo "installed=$installed" >> "$GITHUB_OUTPUT"
+          {
+            echo "clean=$clean"
+            echo "quality=$quality"
+            echo "installed=$installed"
+          } >> "$GITHUB_OUTPUT"
       - name: Build clean ASL3 image
         uses: docker/build-push-action@v7
         with:

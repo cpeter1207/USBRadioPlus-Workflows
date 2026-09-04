@@ -17,7 +17,6 @@ on:
         type: string
       prerelease:
         description: Mark the GitHub release as a prerelease
-        required: true
         default: true
         type: boolean
     outputs:
