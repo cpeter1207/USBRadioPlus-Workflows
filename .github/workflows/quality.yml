@@ -1,0 +1,163 @@
+name: Required quality
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Platform-independent quality
+    runs-on: ubuntu-24.04
+    container: ghcr.io/cpeter1207/usbradioplus-quality-debian13:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Trust workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install pinned modern ASL headers
+        env:
+          ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+        run: |
+          modern_commit=32d268ad49aa44542704bce00873a0425bc71062
+          modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
+          mkdir -p "$modern_include"
+          wget -qO "$modern_include/res_usbradio.h" \
+            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/res_usbradio.h"
+          wget -qO "$modern_include/rpt_chan_shared.h" \
+            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/rpt_chan_shared.h"
+          printf '%s  %s\n%s  %s\n' \
+            1eb851d9c737e7da15936e09747bf1a47015c831a17b2d099bcb28c950a3944a \
+            "$modern_include/res_usbradio.h" \
+            7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
+            "$modern_include/rpt_chan_shared.h" | sha256sum -c -
+      - name: Run independent quality checks concurrently
+        env:
+          ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+        run: |
+          set +e
+          make lint & lint_pid=$!
+          make static-analysis & static_pid=$!
+          make docs & docs_pid=$!
+          wait "$lint_pid"; lint_status=$?
+          wait "$static_pid"; static_status=$?
+          wait "$docs_pid" || echo "Doxygen reported informational warnings"
+          test "$lint_status" -eq 0
+          test "$static_status" -eq 0
+
+  test:
+    name: Debian ${{ matrix.debian }} / ${{ matrix.arch }}
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - debian: "12"
+            arch: amd64
+            runner: ubuntu-24.04
+          - debian: "12"
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - debian: "13"
+            arch: amd64
+            runner: ubuntu-24.04
+          - debian: "13"
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: ghcr.io/cpeter1207/usbradioplus-quality-debian${{ matrix.debian }}:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Trust workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Run platform-specific tests and coverage
+        env:
+          ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+        run: |
+          modern_commit=32d268ad49aa44542704bce00873a0425bc71062
+          modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
+          mkdir -p "$modern_include"
+          wget -qO "$modern_include/res_usbradio.h" \
+            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/res_usbradio.h"
+          wget -qO "$modern_include/rpt_chan_shared.h" \
+            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/rpt_chan_shared.h"
+          printf '%s  %s\n%s  %s\n' \
+            1eb851d9c737e7da15936e09747bf1a47015c831a17b2d099bcb28c950a3944a \
+            "$modern_include/res_usbradio.h" \
+            7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
+            "$modern_include/rpt_chan_shared.h" | sha256sum -c -
+          make platform-verify
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-debian${{ matrix.debian }}-${{ matrix.arch }}
+          path: build/coverage
+          if-no-files-found: error
+
+  required:
+    name: Required quality gate
+    if: always()
+    needs: [quality, test]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every platform
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          PLATFORM_RESULT: ${{ needs.test.result }}
+        run: |
+          test "$QUALITY_RESULT" = success
+          test "$PLATFORM_RESULT" = success
+
+  publish-documentation:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, required]
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}docs/
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Build Doxygen documentation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+          make docs
+      - name: Assemble package site and API documentation
+        run: |
+          mkdir -p public/docs repository
+          git fetch origin apt-repository || true
+          if git show-ref --verify --quiet refs/remotes/origin/apt-repository; then
+            git archive origin/apt-repository | tar -x -C repository
+            cp -a repository/. public/
+            rm -rf public/conf public/db
+          fi
+          cp -a build/doxygen/html/. public/docs/
+          touch public/.nojekyll
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: public
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+      - name: Save versioned API-documentation snapshot
+        run: |
+          cp -a build/doxygen/html /tmp/usbradioplus-api-docs
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch --orphan api-documentation-new
+          git rm -rf --ignore-unmatch .
+          cp -a /tmp/usbradioplus-api-docs/. .
+          touch .nojekyll
+          git add .
+          git commit -m "Publish API documentation for $GITHUB_SHA"
+          git push --force origin HEAD:api-documentation

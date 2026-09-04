@@ -1,0 +1,285 @@
+name: Build test containers
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        required: false
+        default: false
+        type: boolean
+      release_version:
+        required: false
+        default: ""
+        type: string
+      quality_only:
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  verify:
+    if: ${{ !inputs.quality_only && !(github.event_name == 'push' || inputs.publish) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        debian: ['12', '13']
+        architecture:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.architecture.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build and smoke-test installed image natively
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: usbradioplus-installed
+          platforms: ${{ matrix.architecture.platform }}
+          build-args: |
+            DEBIAN_VERSION=${{ matrix.debian }}
+            RUN_SMOKE_TEST=1
+          push: false
+          cache-from: type=gha,scope=verify-${{ matrix.debian }}-${{ matrix.architecture.platform }}
+          cache-to: type=gha,mode=max,scope=verify-${{ matrix.debian }}-${{ matrix.architecture.platform }}
+
+  build:
+    if: ${{ !inputs.quality_only && (github.event_name == 'push' || inputs.publish) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        debian: ['12', '13']
+        architecture:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            suffix: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+    runs-on: ${{ matrix.architecture.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image tags
+        id: tags
+        shell: bash
+        run: |
+          owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          suffix=${{ matrix.architecture.suffix }}
+          clean="ghcr.io/$owner/usbradioplus-asl3-debian${{ matrix.debian }}:clean-$suffix"
+          clean="$clean,ghcr.io/$owner/usbradioplus-asl3-debian${{ matrix.debian }}:sha-${GITHUB_SHA::12}-$suffix"
+          quality="ghcr.io/$owner/usbradioplus-quality-debian${{ matrix.debian }}:latest-$suffix"
+          quality="$quality,ghcr.io/$owner/usbradioplus-quality-debian${{ matrix.debian }}:sha-${GITHUB_SHA::12}-$suffix"
+          installed="ghcr.io/$owner/usbradioplus-debian${{ matrix.debian }}:sha-${GITHUB_SHA::12}-$suffix"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version=${GITHUB_REF_NAME#v}
+            installed="$installed,ghcr.io/$owner/usbradioplus-debian${{ matrix.debian }}:$version-$suffix"
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            installed="$installed,ghcr.io/$owner/usbradioplus-debian${{ matrix.debian }}:edge-$suffix"
+          fi
+          if [[ -n '${{ inputs.release_version }}' ]]; then
+            release_tag=$(printf '%s' '${{ inputs.release_version }}' | tr '~' '-')
+            installed="$installed,ghcr.io/$owner/usbradioplus-debian${{ matrix.debian }}:$release_tag-$suffix"
+          fi
+          echo "clean=$clean" >> "$GITHUB_OUTPUT"
+          echo "quality=$quality" >> "$GITHUB_OUTPUT"
+          echo "installed=$installed" >> "$GITHUB_OUTPUT"
+      - name: Build clean ASL3 image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: asl3-clean
+          platforms: ${{ matrix.architecture.platform }}
+          build-args: DEBIAN_VERSION=${{ matrix.debian }}
+          push: true
+          tags: ${{ steps.tags.outputs.clean }}
+          cache-from: type=gha,scope=clean-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+          cache-to: type=gha,mode=max,scope=clean-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+      - name: Build installed USBRadioPlus image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: usbradioplus-installed
+          platforms: ${{ matrix.architecture.platform }}
+          build-args: |
+            DEBIAN_VERSION=${{ matrix.debian }}
+            RUN_SMOKE_TEST=1
+          push: true
+          tags: ${{ steps.tags.outputs.installed }}
+          cache-from: type=gha,scope=installed-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+          cache-to: type=gha,mode=max,scope=installed-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+      - name: Build prepared quality image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: quality
+          platforms: ${{ matrix.architecture.platform }}
+          build-args: DEBIAN_VERSION=${{ matrix.debian }}
+          push: true
+          tags: ${{ steps.tags.outputs.quality }}
+          cache-from: type=gha,scope=quality-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+          cache-to: type=gha,mode=max,scope=quality-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+
+  publish:
+    if: ${{ !inputs.quality_only && (github.event_name == 'push' || inputs.publish) }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        debian: ['12', '13']
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish multi-architecture manifests
+        shell: bash
+        run: |
+          owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          short_sha=${GITHUB_SHA::12}
+          clean="ghcr.io/$owner/usbradioplus-asl3-debian${{ matrix.debian }}"
+          quality="ghcr.io/$owner/usbradioplus-quality-debian${{ matrix.debian }}"
+          installed="ghcr.io/$owner/usbradioplus-debian${{ matrix.debian }}"
+          publish_manifest() {
+            repository=$1
+            tag=$2
+            docker buildx imagetools create --tag "$repository:$tag" \
+              "$repository:$tag-amd64" "$repository:$tag-arm64"
+          }
+          publish_manifest "$clean" clean
+          publish_manifest "$clean" "sha-$short_sha"
+          publish_manifest "$quality" latest
+          publish_manifest "$quality" "sha-$short_sha"
+          publish_manifest "$installed" "sha-$short_sha"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            publish_manifest "$installed" "${GITHUB_REF_NAME#v}"
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            publish_manifest "$installed" edge
+          fi
+          if [[ -n '${{ inputs.release_version }}' ]]; then
+            release_tag=$(printf '%s' '${{ inputs.release_version }}' | tr '~' '-')
+            publish_manifest "$installed" "$release_tag"
+          fi
+
+  build-quality:
+    if: ${{ inputs.quality_only }}
+    strategy:
+      fail-fast: false
+      matrix:
+        debian: ['12', '13']
+        architecture:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            suffix: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+    runs-on: ${{ matrix.architecture.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image tags
+        id: tags
+        shell: bash
+        run: |
+          owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          repository="ghcr.io/$owner/usbradioplus-quality-debian${{ matrix.debian }}"
+          echo "tags=$repository:latest-${{ matrix.architecture.suffix }},$repository:sha-${GITHUB_SHA::12}-${{ matrix.architecture.suffix }}" >> "$GITHUB_OUTPUT"
+      - name: Build prepared quality image natively
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: quality
+          platforms: ${{ matrix.architecture.platform }}
+          build-args: DEBIAN_VERSION=${{ matrix.debian }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=quality-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+          cache-to: type=gha,mode=max,scope=quality-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
+
+  publish-quality:
+    if: ${{ inputs.quality_only }}
+    needs: build-quality
+    strategy:
+      fail-fast: false
+      matrix:
+        debian: ['12', '13']
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish multi-architecture manifests
+        shell: bash
+        run: |
+          owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          repository="ghcr.io/$owner/usbradioplus-quality-debian${{ matrix.debian }}"
+          short_sha=${GITHUB_SHA::12}
+          docker buildx imagetools create \
+            --tag "$repository:latest" \
+            "$repository:latest-amd64" \
+            "$repository:latest-arm64"
+          docker buildx imagetools create \
+            --tag "$repository:sha-$short_sha" \
+            "$repository:sha-$short_sha-amd64" \
+            "$repository:sha-$short_sha-arm64"
+
+  required:
+    name: Required container gate
+    if: always()
+    needs: [verify, build, publish, build-quality, publish-quality]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          BUILD_QUALITY_RESULT: ${{ needs['build-quality'].result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          PUBLISH_QUALITY_RESULT: ${{ needs['publish-quality'].result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          QUALITY_ONLY: ${{ inputs.quality_only }}
+          PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          if [[ "$QUALITY_ONLY" == true ]]; then
+            test "$BUILD_QUALITY_RESULT" = success
+            test "$PUBLISH_QUALITY_RESULT" = success
+          else
+            if [[ "$PUBLISH" == true ]]; then
+              test "$VERIFY_RESULT" = skipped
+              test "$BUILD_RESULT" = success
+              test "$PUBLISH_RESULT" = success
+            else
+              test "$VERIFY_RESULT" = success
+              test "$BUILD_RESULT" = skipped
+              test "$PUBLISH_RESULT" = skipped
+            fi
+          fi

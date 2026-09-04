@@ -1,0 +1,89 @@
+name: Publish package-site files
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+    env:
+      PUBLIC_DIR: /tmp/usbradioplus-public
+      SITE_DIR: /tmp/usbradioplus-site
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Update static package-site files
+        run: |
+          set -eux
+          mkdir "$PUBLIC_DIR"
+          git fetch origin apt-repository
+          git archive origin/apt-repository | tar -x -C "$PUBLIC_DIR"
+          cp packaging/repository/index.html \
+            packaging/repository/install-usbradioplus.sh \
+            packaging/repository/usbradioplus-archive-keyring.gpg "$PUBLIC_DIR/"
+          chmod 0755 "$PUBLIC_DIR/install-usbradioplus.sh"
+          cp -a "$PUBLIC_DIR" "$SITE_DIR"
+          rm -rf "$SITE_DIR/conf" "$SITE_DIR/db"
+          git fetch origin api-documentation || true
+          if git show-ref --verify --quiet refs/remotes/origin/api-documentation; then
+            mkdir -p "$SITE_DIR/docs"
+            git archive origin/api-documentation | tar -x -C "$SITE_DIR/docs"
+          fi
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: /tmp/usbradioplus-site
+      - name: Save repository snapshot
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch --orphan apt-repository-new
+          git rm -rf --ignore-unmatch .
+          cp -a "$PUBLIC_DIR/." .
+          touch .nojekyll
+          git add .
+          git commit -m "Publish USBRadioPlus package-site files"
+          git push --force origin HEAD:apt-repository
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify the published installer
+        run: |
+          set -eux
+          for attempt in 1 2 3 4 5; do
+            echo "Download attempt $attempt"
+            curl -fsSLo /tmp/install-usbradioplus.sh \
+              https://cpeter1207.github.io/USBRadioPlus/install-usbradioplus.sh && break
+            sleep 10
+          done
+          test -s /tmp/install-usbradioplus.sh
+          sh -n /tmp/install-usbradioplus.sh
+          grep -F 'A0D5A79E0F5C45E9E63679950951502BAC795E55' \
+            /tmp/install-usbradioplus.sh
+          curl -fsSL https://cpeter1207.github.io/USBRadioPlus/ | \
+            grep -F 'sudo sh install-usbradioplus.sh'
