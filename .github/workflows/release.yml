@@ -172,7 +172,6 @@ jobs:
               run_id="$(gh run list \
                 --workflow "$workflow" \
                 --branch "$release_branch" \
-                --event workflow_dispatch \
                 --limit 5 \
                 --json databaseId,headSha \
                 --jq ".[] | select(.headSha == \"$release_head\") | .databaseId" \
