@@ -25,9 +25,11 @@ on:
         value: ${{ jobs.release.outputs.tag_name }}
 
 permissions:
+  actions: write
   contents: write
   packages: write
   pages: write
+  pull-requests: write
   id-token: write
 
 concurrency:
@@ -140,12 +142,73 @@ jobs:
           cp "dist/usbradioplus-$RELEASE_VERSION.tar.xz" "dist/$ASSET_BASENAME"
           (cd dist && sha256sum "$ASSET_BASENAME" > "$ASSET_BASENAME.sha256")
 
-      - name: Push release commit and tag
+      - name: Prepare next development version
         shell: bash
         run: |
           set -euo pipefail
-          git tag -a "$TAG_NAME" -m "USBRadioPlus $RELEASE_VERSION"
-          git push --atomic origin HEAD:main "refs/tags/$TAG_NAME"
+          printf '%s\n' "$NEXT_VERSION" > VERSION
+          git add VERSION
+          git commit -m "Start $NEXT_VERSION development"
+
+      - name: Merge release bookkeeping through required checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_branch="automation/release-${TAG_NAME#v}-${GITHUB_RUN_ID}"
+          release_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/$release_branch"
+
+          pr_url="$(gh pr create \
+            --base main \
+            --head "$release_branch" \
+            --title "Release $RELEASE_VERSION" \
+            --body "Update the changelog for $RELEASE_VERSION and start $NEXT_VERSION development.")"
+
+          find_run() {
+            workflow="$1"
+            run_id=""
+            for _attempt in $(seq 1 30); do
+              run_id="$(gh run list \
+                --workflow "$workflow" \
+                --branch "$release_branch" \
+                --event workflow_dispatch \
+                --limit 5 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$release_head\") | .databaseId" \
+                | head -n 1)"
+              if [[ -n "$run_id" ]]; then
+                printf '%s\n' "$run_id"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Timed out finding $workflow for $release_head" >&2
+            return 1
+          }
+
+          gh workflow run quality.yml --ref "$release_branch"
+          gh workflow run containers.yml --ref "$release_branch"
+          quality_run="$(find_run quality.yml)"
+          containers_run="$(find_run containers.yml)"
+          gh run watch "$quality_run" --exit-status
+          gh run watch "$containers_run" --exit-status
+
+          gh pr merge "$pr_url" --rebase --delete-branch
+          git fetch origin main
+          git checkout --detach origin/main
+          test "$(cat VERSION)" = "$NEXT_VERSION"
+          release_commit="$(git rev-parse HEAD^)"
+          test "$(git show "$release_commit:VERSION")" = "$RELEASE_VERSION"
+          printf 'RELEASE_COMMIT=%s\n' "$release_commit" >> "$GITHUB_ENV"
+
+      - name: Publish release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag -a "$TAG_NAME" "$RELEASE_COMMIT" \
+            -m "USBRadioPlus $RELEASE_VERSION"
+          git push origin "refs/tags/$TAG_NAME"
 
       - name: Create GitHub release
         shell: bash
@@ -160,12 +223,3 @@ jobs:
             args+=(--prerelease)
           fi
           gh "${args[@]}"
-
-      - name: Start next development version
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$NEXT_VERSION" > VERSION
-          git add VERSION
-          git commit -m "Start $NEXT_VERSION development"
-          git push origin HEAD:main
