@@ -173,8 +173,8 @@ jobs:
                 --workflow "$workflow" \
                 --branch "$release_branch" \
                 --limit 5 \
-                --json databaseId,headSha \
-                --jq ".[] | select(.headSha == \"$release_head\") | .databaseId" \
+                --json databaseId,headSha,event \
+                --jq ".[] | select(.headSha == \"$release_head\" and .event == \"workflow_dispatch\") | .databaseId" \
                 | head -n 1)"
               if [[ -n "$run_id" ]]; then
                 printf '%s\n' "$run_id"
