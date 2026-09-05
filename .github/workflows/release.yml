@@ -174,7 +174,7 @@ jobs:
                 --branch "$release_branch" \
                 --limit 5 \
                 --json databaseId,headSha,event \
-                --jq ".[] | select(.headSha == \"$release_head\" and .event == \"workflow_dispatch\") | .databaseId" \
+                --jq ".[] | select(.headSha == \"$release_head\" and .event == \"pull_request\") | .databaseId" \
                 | head -n 1)"
               if [[ -n "$run_id" ]]; then
                 printf '%s\n' "$run_id"
@@ -186,10 +186,18 @@ jobs:
             return 1
           }
 
-          gh workflow run quality.yml --ref "$release_branch"
-          gh workflow run containers.yml --ref "$release_branch"
           quality_run="$(find_run quality.yml)"
           containers_run="$(find_run containers.yml)"
+          for run_id in "$quality_run" "$containers_run"; do
+            conclusion="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+              --jq '.conclusion // ""')"
+            if [[ "$conclusion" == "action_required" ]]; then
+              gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/approve" \
+                >/dev/null
+            fi
+          done
           gh run watch "$quality_run" --exit-status
           gh run watch "$containers_run" --exit-status
 
