@@ -73,7 +73,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y wget devscripts \
             debhelper dh-autoreconf build-essential pkg-config python3-pytest \
-            lintian libsamplerate0-dev libavfilter-dev libavutil-dev \
+            lintian ladspa-sdk libsamplerate0-dev libavfilter-dev libavutil-dev \
             libasound2-dev libusb-dev libusb-1.0-0-dev portaudio19-dev
           wget -qO /tmp/asl-repo.deb \
             "https://repo.allstarlink.org/public/asl-apt-repos.deb${{ matrix.debian }}_all.deb"
