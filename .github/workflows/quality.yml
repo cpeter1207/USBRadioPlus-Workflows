@@ -39,11 +39,24 @@ jobs:
           make lint & lint_pid=$!
           make static-analysis & static_pid=$!
           make docs & docs_pid=$!
-          wait "$lint_pid"; lint_status=$?
-          wait "$static_pid"; static_status=$?
-          wait "$docs_pid" || echo "Doxygen reported informational warnings"
-          test "$lint_status" -eq 0
-          test "$static_status" -eq 0
+          status=0
+          for pid in "$lint_pid" "$static_pid" "$docs_pid"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+      - name: Preserve Doxygen diagnostics
+        if: always() && hashFiles('build/doxygen-warnings.log') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: doxygen-diagnostics
+          path: build/doxygen-warnings.log
+          if-no-files-found: error
+      - name: Save validated API documentation
+        uses: actions/upload-artifact@v7
+        with:
+          name: doxygen-html
+          path: build/doxygen/html
+          if-no-files-found: error
 
   test:
     name: Debian ${{ matrix.debian }} / ${{ matrix.arch }}
@@ -109,7 +122,9 @@ jobs:
           test "$PLATFORM_RESULT" = success
 
   publish-documentation:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main'
     needs: [test, required]
     permissions:
       contents: write
@@ -126,11 +141,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Build Doxygen documentation
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y doxygen graphviz
-          make docs
+      - name: Retrieve validated API documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: doxygen-html
+          path: build/doxygen/html
       - name: Assemble package site and API documentation
         run: |
           mkdir -p public/docs repository
