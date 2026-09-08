@@ -13,11 +13,18 @@ jobs:
     container: ghcr.io/cpeter1207/usbradioplus-quality-debian13:latest
     steps:
       - uses: actions/checkout@v7
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: main
+          path: build/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install pinned modern ASL headers
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+          RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
         run: |
           modern_commit=32d268ad49aa44542704bce00873a0425bc71062
           modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
@@ -81,11 +88,18 @@ jobs:
     container: ghcr.io/cpeter1207/usbradioplus-quality-debian${{ matrix.debian }}:latest
     steps:
       - uses: actions/checkout@v7
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: main
+          path: build/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Run platform-specific tests and coverage
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+          RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
         run: |
           modern_commit=32d268ad49aa44542704bce00873a0425bc71062
           modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
