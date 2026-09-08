@@ -43,6 +43,7 @@ jobs:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
           RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
         run: |
+          make build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so
           set +e
           make lint & lint_pid=$!
           make static-analysis & static_pid=$!
