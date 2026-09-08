@@ -115,7 +115,8 @@ jobs:
             "$modern_include/res_usbradio.h" \
             7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
             "$modern_include/rpt_chan_shared.h" | sha256sum -c -
-          make platform-verify
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib:${LD_LIBRARY_PATH:-}" \
+            make platform-verify
       - name: Upload coverage
         uses: actions/upload-artifact@v7
         with:
