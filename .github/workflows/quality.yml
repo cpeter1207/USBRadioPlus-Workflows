@@ -41,6 +41,7 @@ jobs:
       - name: Run independent quality checks concurrently
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+          RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
         run: |
           set +e
           make lint & lint_pid=$!
