@@ -11,3 +11,9 @@ automation.
 Changes here validate workflow structure without building USBRadioPlus. Once a
 change reaches `main`, subsequent caller runs use it without changing the
 USBRadioPlus repository.
+
+Automatic quality and release work runs on native Debian 13 only: amd64
+collects coverage, while amd64 and arm64 both run tests, builds, and staged
+installation checks. Debian 12 is aspirational and never runs automatically.
+The reusable package workflow accepts `include_debian12: true` only for an
+explicit manual Debian 12 package build.

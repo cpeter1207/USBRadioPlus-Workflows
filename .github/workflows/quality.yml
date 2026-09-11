@@ -69,24 +69,20 @@ jobs:
           if-no-files-found: error
 
   test:
-    name: Debian ${{ matrix.debian }} / ${{ matrix.arch }}
+    name: Debian 13 / ${{ matrix.arch }} / ${{ matrix.verification }}
     needs: quality
     strategy:
       fail-fast: false
       matrix:
         include:
-          - debian: "12"
-            arch: amd64
-            runner: ubuntu-24.04
-          - debian: "12"
-            arch: arm64
-            runner: ubuntu-24.04-arm
           - debian: "13"
             arch: amd64
             runner: ubuntu-24.04
+            verification: coverage
           - debian: "13"
             arch: arm64
             runner: ubuntu-24.04-arm
+            verification: test-and-install
     runs-on: ${{ matrix.runner }}
     container: ghcr.io/cpeter1207/usbradioplus-quality-debian${{ matrix.debian }}:latest
     steps:
@@ -99,7 +95,7 @@ jobs:
           path: dependencies/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Run platform-specific tests and coverage
+      - name: Run platform-specific verification
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
           RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
@@ -116,9 +112,15 @@ jobs:
             "$modern_include/res_usbradio.h" \
             7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
             "$modern_include/rpt_chan_shared.h" | sha256sum -c -
-          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib:${LD_LIBRARY_PATH:-}" \
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib:${LD_LIBRARY_PATH:-}"
+          if [[ '${{ matrix.verification }}' == coverage ]]; then
             make platform-verify
-      - name: Upload coverage
+          else
+            make check
+            make distcheck DISTCHECK_TEST_TARGET=
+          fi
+      - name: Upload Debian 13 amd64 coverage
+        if: ${{ matrix.verification == 'coverage' }}
         uses: actions/upload-artifact@v7
         with:
           name: coverage-debian${{ matrix.debian }}-${{ matrix.arch }}

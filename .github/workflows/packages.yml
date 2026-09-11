@@ -13,6 +13,11 @@ on:
         required: false
         default: "1"
         type: string
+      include_debian12:
+        description: Build Debian 12 packages through an explicit manual caller.
+        required: false
+        default: false
+        type: boolean
     secrets:
       APT_SIGNING_KEY:
         required: true
@@ -27,39 +32,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  select_package_matrix:
+    name: Select package platforms
+    runs-on: ubuntu-24.04
+    outputs:
+      build_matrix: ${{ steps.select.outputs.build_matrix }}
+      verify_matrix: ${{ steps.select.outputs.verify_matrix }}
+    steps:
+      - id: select
+        shell: bash
+        env:
+          INCLUDE_DEBIAN12: ${{ inputs.include_debian12 }}
+        run: |
+          set -euo pipefail
+          # Debian 12 remains available only when an explicit manual caller
+          # requests it; ordinary releases publish Debian 13 artifacts alone.
+          build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"}]}'
+          verify_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm"}]}'
+          if [[ "$INCLUDE_DEBIAN12" == "true" ]]; then
+            build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04-arm","requested_api":"auto"}]}'
+          fi
+          printf 'build_matrix=%s\n' "$build_matrix" >> "$GITHUB_OUTPUT"
+          printf 'verify_matrix=%s\n' "$verify_matrix" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: select_package_matrix
     env:
       DEBFULLNAME: USBRadioPlus Archive
       DEBEMAIL: cpeter1207@users.noreply.github.com
+      # Debian 12 is an explicit package-only compatibility build, not a test
+      # platform. Debian 13 continues to run its package test hooks.
+      DEB_BUILD_OPTIONS: ${{ matrix.debian == '12' && 'nocheck' || '' }}
       # This packaging-only release retains the published ABI-major 1 ring
       # implementation and supplies its Debian runtime/development packages.
       RATE_ADJUSTING_PCM_RING_TAG: v1.0.1
       RATE_ADJUSTING_PCM_RING_VERSION: "1.0.1"
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - debian: "12"
-            suite: bookworm
-            runner: ubuntu-24.04
-            requested_api: auto
-          - debian: "12"
-            suite: bookworm
-            runner: ubuntu-24.04-arm
-            requested_api: auto
-          - debian: "13"
-            suite: trixie
-            runner: ubuntu-24.04
-            requested_api: auto
-          - debian: "13"
-            suite: trixie
-            runner: ubuntu-24.04-arm
-            requested_api: auto
-          - debian: "13"
-            suite: trixie
-            runner: ubuntu-24.04-arm
-            requested_api: modern
-            target_asl_version: "2:22.10.1+asl3-3.10.5-1.deb13"
+      matrix: ${{ fromJSON(needs.select_package_matrix.outputs.build_matrix) }}
     runs-on: ${{ matrix.runner }}
     container: debian:${{ matrix.debian }}
     steps:
@@ -209,6 +219,7 @@ jobs:
       PUBLIC_DIR: /tmp/usbradioplus-package-public
       SITE_DIR: /tmp/usbradioplus-package-site
       OLD_REPO_DIR: /tmp/usbradioplus-old-repository
+      INCLUDE_DEBIAN12: ${{ inputs.include_debian12 }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -259,7 +270,11 @@ jobs:
             packaging/repository/install-usbradioplus.sh \
             packaging/repository/usbradioplus-archive-keyring.gpg "$PUBLIC_DIR/"
           chmod 0755 "$PUBLIC_DIR/install-usbradioplus.sh"
-          for suite in bookworm trixie; do
+          active_suites=(trixie)
+          if [[ "$INCLUDE_DEBIAN12" == "true" ]]; then
+            active_suites+=(bookworm)
+          fi
+          for suite in "${active_suites[@]}"; do
             cat >> "$PUBLIC_DIR/conf/distributions" <<EOF
           Origin: USBRadioPlus
           Label: USBRadioPlus
@@ -274,7 +289,12 @@ jobs:
           done
           for package in "$INCOMING_DIR"/*.deb; do
             case "$package" in
-              *.deb12_*|*.deb12+*_*) suite=bookworm ;;
+              *.deb12_*|*.deb12+*_*)
+                if [[ "$INCLUDE_DEBIAN12" != "true" ]]; then
+                  continue
+                fi
+                suite=bookworm
+                ;;
               *.deb13_*|*.deb13+*_*) suite=trixie ;;
               *) echo "Cannot select suite for $package" >&2; exit 1 ;;
             esac
@@ -320,23 +340,10 @@ jobs:
           artifact_name: usbradioplus-packages-pages
 
   verify:
-    needs: deploy
+    needs: [deploy, select_package_matrix]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - debian: "12"
-            suite: bookworm
-            runner: ubuntu-24.04
-          - debian: "12"
-            suite: bookworm
-            runner: ubuntu-24.04-arm
-          - debian: "13"
-            suite: trixie
-            runner: ubuntu-24.04
-          - debian: "13"
-            suite: trixie
-            runner: ubuntu-24.04-arm
+      matrix: ${{ fromJSON(needs.select_package_matrix.outputs.verify_matrix) }}
     runs-on: ${{ matrix.runner }}
     container: debian:${{ matrix.debian }}
     steps:

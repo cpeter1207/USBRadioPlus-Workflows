@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        debian: ['12', '13']
+        debian: ['13']
         architecture:
           - runner: ubuntu-24.04
             platform: linux/amd64
@@ -61,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        debian: ['12', '13']
+        debian: ['13']
         architecture:
           - runner: ubuntu-24.04
             platform: linux/amd64
@@ -158,7 +158,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        debian: ['12', '13']
+        debian: ['13']
     runs-on: ubuntu-24.04
     steps:
       - uses: docker/setup-buildx-action@v4
@@ -202,7 +202,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        debian: ['12', '13']
+        debian: ['13']
         architecture:
           - runner: ubuntu-24.04
             platform: linux/amd64
@@ -253,7 +253,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        debian: ['12', '13']
+        debian: ['13']
     runs-on: ubuntu-24.04
     steps:
       - uses: docker/setup-buildx-action@v4

@@ -41,7 +41,7 @@ jobs:
     outputs:
       tag_name: ${{ steps.release_metadata.outputs.tag_name }}
     runs-on: ubuntu-latest
-    container: debian:12
+    container: debian:13
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ inputs.release_version }}
@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           wget -q -O /tmp/asl-apt-repos.deb \
-            https://repo.allstarlink.org/public/asl-apt-repos.deb12_all.deb
+            https://repo.allstarlink.org/public/asl-apt-repos.deb13_all.deb
           dpkg -i /tmp/asl-apt-repos.deb
           ./scripts/install-build-deps.sh
 
