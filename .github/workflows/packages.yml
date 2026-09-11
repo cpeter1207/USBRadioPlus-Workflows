@@ -48,7 +48,7 @@ jobs:
           # Debian 12 remains available only when an explicit manual caller
           # requests it; ordinary releases publish Debian 13 artifacts alone.
           build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"}]}'
-          verify_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm"}]}'
+          verify_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"}]}'
           if [[ "$INCLUDE_DEBIAN12" == "true" ]]; then
             build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04-arm","requested_api":"auto"}]}'
           fi
@@ -104,6 +104,15 @@ jobs:
           dpkg -i /tmp/asl-repo.deb
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y asl3-asterisk-dev
+      - name: Preserve legacy ASL3 headers
+        if: matrix.requested_api == 'modern'
+        run: |
+          mkdir -p /opt/asl-legacy/include/asterisk
+          cp /usr/include/asterisk/res_usbradio.h /usr/include/asterisk/rpt_chan_shared.h \
+            /opt/asl-legacy/include/asterisk/
+      - name: Install matching modern ASL3 runtime
+        if: matrix.requested_api == 'modern'
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
       - name: Build and install rate-adjusting PCM ring packages
         run: |
           set -eux
@@ -146,21 +155,11 @@ jobs:
           test -n "$package_version" || package_version=$(cat VERSION)
           binary_package=usbradioplus
           if test '${{ matrix.requested_api }}' = modern; then
-            modern_commit=32d268ad49aa44542704bce00873a0425bc71062
-            modern_include=/tmp/asl-modern/include/asterisk
-            mkdir -p "$modern_include"
-            wget -qO "$modern_include/res_usbradio.h" \
-              "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/res_usbradio.h"
-            wget -qO "$modern_include/rpt_chan_shared.h" \
-              "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/rpt_chan_shared.h"
-            printf '%s  %s\n%s  %s\n' \
-              1eb851d9c737e7da15936e09747bf1a47015c831a17b2d099bcb28c950a3944a \
-              "$modern_include/res_usbradio.h" \
-              7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
-              "$modern_include/rpt_chan_shared.h" | sha256sum -c -
+            test "$(dpkg-query -W -f='${Version}' asl3-asterisk)" = \
+              '${{ matrix.target_asl_version }}'
             export ASL_RADIO_API=modern
-            export CPPFLAGS=-I/tmp/asl-modern/include
-            export ASL3_ASTERISK_VERSION='${{ matrix.target_asl_version }}'
+            export ASL_LEGACY_INCLUDEDIR=/opt/asl-legacy/include
+            export ASL_MODERN_INCLUDEDIR=/usr/include
             binary_package=usbradioplus-asl3105
             sed -i 's/^Package: usbradioplus$/Package: usbradioplus-asl3105/' debian/control
             sed -i '/^Architecture: amd64 arm64$/a Conflicts: usbradioplus\nReplaces: usbradioplus' debian/control
@@ -169,9 +168,6 @@ jobs:
           export DEB_BINARY_PACKAGE="$binary_package"
           radio_api=$(make -s print-asl-radio-api)
           asl_version=$(dpkg-query -W -f='${Version}' asl3-asterisk)
-          if test -n '${{ matrix.target_asl_version }}'; then
-            asl_version='${{ matrix.target_asl_version }}'
-          fi
           app_rpt_version=$(printf '%s\n' "$asl_version" | \
             sed -n 's/.*+asl3-\([0-9][0-9.]*\)-.*/\1/p')
           test -n "$app_rpt_version"
@@ -347,7 +343,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container: debian:${{ matrix.debian }}
     steps:
-      - name: Install from the published signed repository
+      - name: Install ASL3 runtime
         run: |
           set -eux
           apt-get update
@@ -357,6 +353,19 @@ jobs:
           dpkg -i /tmp/asl-repo.deb
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y asl3-asterisk
+      - name: Install matching modern ASL3 runtime
+        if: matrix.requested_api == 'modern'
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
+      - name: Install from the published signed repository
+        run: |
+          set -eux
+          if test '${{ matrix.requested_api }}' = modern; then
+            test "$(dpkg-query -W -f='${Version}' asl3-asterisk)" = \
+              '${{ matrix.target_asl_version }}'
+            package=usbradioplus-asl3105
+          else
+            package=usbradioplus
+          fi
           mkdir -p /tmp/config-before
           cp -a /etc/asterisk/modules.conf /etc/asterisk/rpt.conf /tmp/config-before/ 2>/dev/null || true
           for attempt in 1 2 3 4 5; do
@@ -385,4 +394,4 @@ jobs:
           cmp -s /tmp/config-before/rpt.conf /etc/asterisk/rpt.conf 2>/dev/null || \
             test ! -e /tmp/config-before/rpt.conf
           dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
-            usbradioplus librnnoise0 librate-adjusting-pcm-ring1
+            "$package" librnnoise0 librate-adjusting-pcm-ring1

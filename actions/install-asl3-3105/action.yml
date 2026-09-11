@@ -1,0 +1,54 @@
+name: Install released ASL3 3.10.5
+description: Replace the public-APT ASL3 runtime with the checksum-pinned 3.10.5 release.
+
+runs:
+  using: composite
+  steps:
+    - name: Install matching Asterisk runtime and headers
+      shell: bash
+      run: |
+        set -euo pipefail
+        release_base='https://github.com/AllStarLink/asl3-asterisk/releases/download/22.10.1%2Basl3-3.10.5-1'
+        expected_version='2:22.10.1+asl3-3.10.5-1.deb13'
+        stage=$(mktemp -d)
+        trap 'rm -rf "$stage"' EXIT HUP INT TERM
+
+        fetch() {
+          if command -v wget >/dev/null; then
+            wget -qO "$2" "$1"
+          else
+            curl -fsSL "$1" -o "$2"
+          fi
+        }
+
+        fetch "$release_base/asl3-asterisk-config_22.10.1%2Basl3-3.10.5-1.deb13_all.deb" \
+          "$stage/config.deb"
+        fetch "$release_base/asl3-asterisk-dev_22.10.1%2Basl3-3.10.5-1.deb13_all.deb" \
+          "$stage/dev.deb"
+        case "$(dpkg --print-architecture)" in
+          amd64)
+            asterisk_sum='5e536c90596e30a61385143bb78a27da967d95c75a1c7304182cd26b606c5778'
+            modules_sum='d219092e4a8fb94e8915526abc0e23d55c257f619ffba7655fd71a2be1d5d7c7'
+            ;;
+          arm64)
+            asterisk_sum='d7cc03329c97a808f43b8d430e5a703ffb877fe34b606ec54a7a70f1dea50bf3'
+            modules_sum='9ea6e7bd8d453ccdab8f6807a6719b4ef5e5639475ffc50810873dfc42bba240'
+            ;;
+          *)
+            echo "ASL3 3.10.5 has no supported package for $(dpkg --print-architecture)" >&2
+            exit 1
+            ;;
+        esac
+        fetch "$release_base/asl3-asterisk_22.10.1%2Basl3-3.10.5-1.deb13_$(dpkg --print-architecture).deb" \
+          "$stage/asterisk.deb"
+        fetch "$release_base/asl3-asterisk-modules_22.10.1%2Basl3-3.10.5-1.deb13_$(dpkg --print-architecture).deb" \
+          "$stage/modules.deb"
+        printf '%s  %s\n' \
+          '979e6445dd78440ae47ae53a0cf47e448270d23727f00ffabcb0e47030d5bb83' "$stage/config.deb" \
+          '7236bd5593357cb0785ac6d1e11274b39b2f0c4aa164a180fbeff6ef4effa6ed' "$stage/dev.deb" \
+          "$asterisk_sum" "$stage/asterisk.deb" \
+          "$modules_sum" "$stage/modules.deb" | sha256sum -c -
+        dpkg -i "$stage/config.deb" "$stage/asterisk.deb" "$stage/modules.deb" "$stage/dev.deb"
+        for package in asl3-asterisk asl3-asterisk-config asl3-asterisk-dev asl3-asterisk-modules; do
+          test "$(dpkg-query -W -f='${Version}' "$package")" = "$expected_version"
+        done
