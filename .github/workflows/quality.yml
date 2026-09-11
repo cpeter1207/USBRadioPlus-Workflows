@@ -21,26 +21,10 @@ jobs:
           path: dependencies/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Install pinned modern ASL headers
-        env:
-          ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
-          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
-        run: |
-          modern_commit=32d268ad49aa44542704bce00873a0425bc71062
-          modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
-          mkdir -p "$modern_include"
-          wget -qO "$modern_include/res_usbradio.h" \
-            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/res_usbradio.h"
-          wget -qO "$modern_include/rpt_chan_shared.h" \
-            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/rpt_chan_shared.h"
-          printf '%s  %s\n%s  %s\n' \
-            1eb851d9c737e7da15936e09747bf1a47015c831a17b2d099bcb28c950a3944a \
-            "$modern_include/res_usbradio.h" \
-            7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
-            "$modern_include/rpt_chan_shared.h" | sha256sum -c -
+      - name: Install matching modern ASL3 runtime
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
       - name: Run independent quality checks concurrently
         env:
-          ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
           RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
           export PATH="/opt/usbradioplus-quality/bin:$PATH"
@@ -95,24 +79,19 @@ jobs:
           path: dependencies/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Preserve the legacy ASL3 headers
+        run: |
+          mkdir -p /opt/asl-legacy/include/asterisk
+          cp /usr/include/asterisk/res_usbradio.h /usr/include/asterisk/rpt_chan_shared.h \
+            /opt/asl-legacy/include/asterisk/
+      - name: Install matching modern ASL3 runtime
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
       - name: Run platform-specific verification
         env:
-          ASTERISK_INCLUDEDIR: /opt/asl-modern/include
-          ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
+          ASL_LEGACY_INCLUDEDIR: /opt/asl-legacy/include
+          ASL_MODERN_INCLUDEDIR: /usr/include
           RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
-          modern_commit=32d268ad49aa44542704bce00873a0425bc71062
-          modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
-          mkdir -p "$modern_include"
-          wget -qO "$modern_include/res_usbradio.h" \
-            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/res_usbradio.h"
-          wget -qO "$modern_include/rpt_chan_shared.h" \
-            "https://raw.githubusercontent.com/AllStarLink/app_rpt/$modern_commit/include/asterisk/rpt_chan_shared.h"
-          printf '%s  %s\n%s  %s\n' \
-            1eb851d9c737e7da15936e09747bf1a47015c831a17b2d099bcb28c950a3944a \
-            "$modern_include/res_usbradio.h" \
-            7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
-            "$modern_include/rpt_chan_shared.h" | sha256sum -c -
           export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib:${LD_LIBRARY_PATH:-}"
           if [ '${{ matrix.verification }}' = coverage ]; then
             make platform-verify
