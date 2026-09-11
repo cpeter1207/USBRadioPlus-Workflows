@@ -17,14 +17,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: cpeter1207/rate_adjusting_pcm_ring
-          ref: main
-          path: build/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install pinned modern ASL headers
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
-          RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
+          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
           modern_commit=32d268ad49aa44542704bce00873a0425bc71062
           modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"
@@ -41,8 +41,9 @@ jobs:
       - name: Run independent quality checks concurrently
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
-          RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
+          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
+          export PATH="/opt/usbradioplus-quality/bin:$PATH"
           make build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so
           set +e
           make lint & lint_pid=$!
@@ -94,14 +95,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: cpeter1207/rate_adjusting_pcm_ring
-          ref: main
-          path: build/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Run platform-specific tests and coverage
         env:
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
-          RPCR_SOURCE: ${{ github.workspace }}/build/rate_adjusting_pcm_ring
+          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
           modern_commit=32d268ad49aa44542704bce00873a0425bc71062
           modern_include="$ASL_MODERN_INCLUDEDIR/asterisk"

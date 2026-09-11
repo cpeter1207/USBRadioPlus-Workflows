@@ -31,6 +31,10 @@ jobs:
     env:
       DEBFULLNAME: USBRadioPlus Archive
       DEBEMAIL: cpeter1207@users.noreply.github.com
+      # This packaging-only release retains the published ABI-major 1 ring
+      # implementation and supplies its Debian runtime/development packages.
+      RATE_ADJUSTING_PCM_RING_TAG: v1.0.1
+      RATE_ADJUSTING_PCM_RING_VERSION: "1.0.1"
     strategy:
       fail-fast: false
       matrix:
@@ -66,8 +70,18 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_ref }}
-      - name: Trust workspace
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out released rate-adjusting PCM ring source
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: ${{ env.RATE_ADJUSTING_PCM_RING_TAG }}
+          path: dependencies/rate_adjusting_pcm_ring
+          persist-credentials: false
+      - name: Trust checked-out workspaces
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory \
+            "$GITHUB_WORKSPACE/dependencies/rate_adjusting_pcm_ring"
       - name: Install ASL3 repository and package tools
         run: |
           apt-get update
@@ -80,6 +94,26 @@ jobs:
           dpkg -i /tmp/asl-repo.deb
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y asl3-asterisk-dev
+      - name: Build and install rate-adjusting PCM ring packages
+        run: |
+          set -eux
+          ring_source="$GITHUB_WORKSPACE/dependencies/rate_adjusting_pcm_ring"
+          test "$(git -C "$ring_source" describe --exact-match --tags HEAD)" = \
+            "$RATE_ADJUSTING_PCM_RING_TAG"
+          test -z "$(git -C "$ring_source" status --porcelain)"
+          cd "$ring_source"
+          dch --newversion "$RATE_ADJUSTING_PCM_RING_VERSION-1.deb${{ matrix.debian }}" \
+            --distribution "${{ matrix.suite }}" \
+            "Build for Debian ${{ matrix.debian }}."
+          dpkg-buildpackage -b -us -uc
+          lintian --fail-on error ../rate-adjusting-pcm-ring_*.changes
+          dpkg -i ../librate-adjusting-pcm-ring1_*.deb \
+            ../librate-adjusting-pcm-ring-dev_*.deb
+          test "$(dpkg-query -W -f='${db:Status-Status}' \
+            librate-adjusting-pcm-ring1)" = installed
+          pkg-config --exists rate_adjusting_pcm_ring
+          test "$(pkg-config --modversion rate_adjusting_pcm_ring)" = \
+            "$RATE_ADJUSTING_PCM_RING_VERSION"
       - name: Build RNNoise companion packages
         run: |
           set -eux
@@ -140,10 +174,13 @@ jobs:
           mkdir -p package-output
           cp ../"$binary_package"_*.deb package-output/
           # The exact-version ARM build uses the same RNNoise binaries as the
-          # ordinary ARM build. Publish one copy so artifact merging cannot
-          # overwrite two files with the same package name.
+          # ordinary ARM build. The same applies to the released shared ring.
+          # Publish one copy so artifact merging cannot overwrite two files
+          # with the same package name.
           if test '${{ matrix.requested_api }}' != modern; then
             cp /tmp/librnnoise0_*.deb /tmp/librnnoise-dev_*.deb package-output/
+            cp dependencies/librate-adjusting-pcm-ring1_*.deb \
+              dependencies/librate-adjusting-pcm-ring-dev_*.deb package-output/
           fi
           find .. -maxdepth 1 -name "$binary_package-dbgsym_*.deb" \
             -exec cp -t package-output {} +
@@ -152,6 +189,8 @@ jobs:
             "$asl_version" "$app_rpt_version" "$radio_api" > package-output/build-info.txt
           test "$(dpkg-deb -f ../"$binary_package"_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
+          test "$(dpkg-deb -f ../"$binary_package"_*.deb Depends | \
+            grep -c 'librate-adjusting-pcm-ring1')" = 1
           test "$(dpkg-deb -f ../"$binary_package"_*.deb Package)" = "$binary_package"
       - uses: actions/upload-artifact@v7
         with:
@@ -326,9 +365,17 @@ jobs:
           test -f "$module_dir/chan_usbradioplus.so"
           test -x /usr/sbin/usbradioplus-tune
           test -f /usr/share/man/man7/usbradioplus.7.gz
+          test "$(dpkg-query -W -f='${db:Status-Status}' \
+            librate-adjusting-pcm-ring1)" = installed
+          ring_library=$(dpkg-query -L librate-adjusting-pcm-ring1 | \
+            sed -n '/\/librate_adjusting_pcm_ring\.so\.1$/ { p; q; }')
+          test -n "$ring_library"
+          test -f "$ring_library"
+          ldd "$module_dir/chan_usbradioplus.so" | \
+            grep -F 'librate_adjusting_pcm_ring.so.1' | grep -Fv 'not found'
           cmp -s /tmp/config-before/modules.conf /etc/asterisk/modules.conf 2>/dev/null || \
             test ! -e /tmp/config-before/modules.conf
           cmp -s /tmp/config-before/rpt.conf /etc/asterisk/rpt.conf 2>/dev/null || \
             test ! -e /tmp/config-before/rpt.conf
           dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
-            usbradioplus librnnoise0
+            usbradioplus librnnoise0 librate-adjusting-pcm-ring1

@@ -34,6 +34,12 @@ jobs:
     runs-on: ${{ matrix.architecture.runner }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
       - uses: docker/setup-buildx-action@v4
       - name: Build and smoke-test installed image natively
         uses: docker/build-push-action@v7
@@ -45,6 +51,7 @@ jobs:
           build-args: |
             DEBIAN_VERSION=${{ matrix.debian }}
             RUN_SMOKE_TEST=1
+          build-contexts: rate_adjusting_pcm_ring=dependencies/rate_adjusting_pcm_ring
           push: false
           cache-from: type=gha,scope=verify-${{ matrix.debian }}-${{ matrix.architecture.platform }}
           cache-to: type=gha,mode=max,scope=verify-${{ matrix.debian }}-${{ matrix.architecture.platform }}
@@ -65,6 +72,12 @@ jobs:
     runs-on: ${{ matrix.architecture.runner }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
       - uses: docker/setup-buildx-action@v4
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -106,6 +119,7 @@ jobs:
           target: asl3-clean
           platforms: ${{ matrix.architecture.platform }}
           build-args: DEBIAN_VERSION=${{ matrix.debian }}
+          build-contexts: rate_adjusting_pcm_ring=dependencies/rate_adjusting_pcm_ring
           push: true
           tags: ${{ steps.tags.outputs.clean }}
           cache-from: type=gha,scope=clean-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
@@ -120,6 +134,7 @@ jobs:
           build-args: |
             DEBIAN_VERSION=${{ matrix.debian }}
             RUN_SMOKE_TEST=1
+          build-contexts: rate_adjusting_pcm_ring=dependencies/rate_adjusting_pcm_ring
           push: true
           tags: ${{ steps.tags.outputs.installed }}
           cache-from: type=gha,scope=installed-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
@@ -198,6 +213,12 @@ jobs:
     runs-on: ${{ matrix.architecture.runner }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
       - uses: docker/setup-buildx-action@v4
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -220,6 +241,7 @@ jobs:
           target: quality
           platforms: ${{ matrix.architecture.platform }}
           build-args: DEBIAN_VERSION=${{ matrix.debian }}
+          build-contexts: rate_adjusting_pcm_ring=dependencies/rate_adjusting_pcm_ring
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=quality-${{ matrix.debian }}-${{ matrix.architecture.suffix }}
