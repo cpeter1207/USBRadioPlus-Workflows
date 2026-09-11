@@ -97,6 +97,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Run platform-specific verification
         env:
+          ASTERISK_INCLUDEDIR: /opt/asl-modern/include
           ASL_MODERN_INCLUDEDIR: /opt/asl-modern/include
           RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
@@ -113,7 +114,7 @@ jobs:
             7523e77d367ec8cd784711040789da2d3cc47584d2ac47c3b7788fbdc004832c \
             "$modern_include/rpt_chan_shared.h" | sha256sum -c -
           export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib:${LD_LIBRARY_PATH:-}"
-          if [[ '${{ matrix.verification }}' == coverage ]]; then
+          if [ '${{ matrix.verification }}' = coverage ]; then
             make platform-verify
           else
             make check
