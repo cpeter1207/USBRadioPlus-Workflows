@@ -111,6 +111,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Annotated release tags need a local identity even though the
+          # authenticated GitHub token performs the network push.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG_NAME" "$RELEASE_COMMIT" \
             -m "USBRadioPlus $RELEASE_VERSION"
           git push origin "refs/tags/$TAG_NAME"
