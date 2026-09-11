@@ -1,0 +1,50 @@
+name: Fast quality
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Formatting, lint, and static analysis
+    runs-on: ubuntu-24.04
+    container: ghcr.io/cpeter1207/usbradioplus-quality-debian13:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
+      - name: Trust workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install matching modern ASL3 runtime
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
+      - name: Run formatting, lint, and static analysis concurrently
+        env:
+          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
+        run: |
+          export PATH="/opt/usbradioplus-quality/bin:$PATH"
+          make "$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so"
+          set +e
+          make lint & lint_pid=$!
+          make static-analysis & static_pid=$!
+          status=0
+          for pid in "$lint_pid" "$static_pid"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+
+  required:
+    name: Fast quality
+    if: always()
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require preflight success
+        env:
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+        run: test "$PREFLIGHT_RESULT" = success

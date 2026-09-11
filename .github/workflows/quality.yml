@@ -45,13 +45,6 @@ jobs:
           name: doxygen-diagnostics
           path: build/doxygen-warnings.log
           if-no-files-found: error
-      - name: Save validated API documentation
-        uses: actions/upload-artifact@v7
-        with:
-          name: doxygen-html
-          path: build/doxygen/html
-          if-no-files-found: error
-
   test:
     name: Debian 13 / ${{ matrix.arch }} / ${{ matrix.verification }}
     needs: quality
@@ -120,59 +113,3 @@ jobs:
         run: |
           test "$QUALITY_RESULT" = success
           test "$PLATFORM_RESULT" = success
-
-  publish-documentation:
-    if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      github.ref == 'refs/heads/main'
-    needs: [test, required]
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}docs/
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Retrieve validated API documentation
-        uses: actions/download-artifact@v8
-        with:
-          name: doxygen-html
-          path: build/doxygen/html
-      - name: Assemble package site and API documentation
-        run: |
-          mkdir -p public/docs repository
-          git fetch origin apt-repository || true
-          if git show-ref --verify --quiet refs/remotes/origin/apt-repository; then
-            git archive origin/apt-repository | tar -x -C repository
-            cp -a repository/. public/
-            rm -rf public/conf public/db
-          fi
-          cp -a build/doxygen/html/. public/docs/
-          touch public/.nojekyll
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: public
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
-      - name: Save versioned API-documentation snapshot
-        run: |
-          cp -a build/doxygen/html /tmp/usbradioplus-api-docs
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git switch --orphan api-documentation-new
-          git rm -rf --ignore-unmatch .
-          cp -a /tmp/usbradioplus-api-docs/. .
-          touch .nojekyll
-          git add .
-          git commit -m "Publish API documentation for $GITHUB_SHA"
-          git push --force origin HEAD:api-documentation

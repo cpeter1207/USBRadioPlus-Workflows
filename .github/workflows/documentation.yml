@@ -1,0 +1,79 @@
+name: Publish API documentation
+
+on:
+  workflow_call:
+    inputs:
+      code_ref:
+        description: Immutable production main revision whose API documentation is published.
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  documentation:
+    runs-on: ubuntu-24.04
+    container: ghcr.io/cpeter1207/usbradioplus-quality-debian13:latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}docs/
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/USBRadioPlus
+          ref: ${{ inputs.code_ref }}
+          fetch-depth: 0
+      - name: Check out the shared playout ring
+        uses: actions/checkout@v7
+        with:
+          repository: cpeter1207/rate_adjusting_pcm_ring
+          ref: v1.0.1
+          path: dependencies/rate_adjusting_pcm_ring
+      - name: Trust workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install matching modern ASL3 runtime
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
+      - name: Build API documentation
+        env:
+          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
+        run: |
+          export PATH="/opt/usbradioplus-quality/bin:$PATH"
+          make "$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so"
+          make docs
+      - name: Assemble package site and API documentation
+        run: |
+          mkdir -p public/docs repository
+          git fetch origin apt-repository || true
+          if git show-ref --verify --quiet refs/remotes/origin/apt-repository; then
+            git archive origin/apt-repository | tar -x -C repository
+            cp -a repository/. public/
+            rm -rf public/conf public/db
+          fi
+          cp -a build/doxygen/html/. public/docs/
+          touch public/.nojekyll
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: public
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+      - name: Save versioned API-documentation snapshot
+        run: |
+          cp -a build/doxygen/html /tmp/usbradioplus-api-docs
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch --orphan api-documentation-new
+          git rm -rf --ignore-unmatch .
+          cp -a /tmp/usbradioplus-api-docs/. .
+          touch .nojekyll
+          git add .
+          git commit -m "Publish API documentation for $GITHUB_SHA"
+          git push --force origin HEAD:api-documentation

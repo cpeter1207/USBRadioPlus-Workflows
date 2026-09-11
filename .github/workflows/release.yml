@@ -4,11 +4,7 @@ on:
   workflow_call:
     inputs:
       release_version:
-        description: Version currently in VERSION to release (for example, 0.1.0~alpha1)
-        required: true
-        type: string
-      next_version:
-        description: Development version to write after the release
+        description: Version already committed to main for release (for example, 0.1.0~alpha1)
         required: true
         type: string
       changes:
@@ -25,12 +21,7 @@ on:
         value: ${{ jobs.release.outputs.tag_name }}
 
 permissions:
-  actions: write
   contents: write
-  packages: write
-  pages: write
-  pull-requests: write
-  id-token: write
 
 concurrency:
   group: release
@@ -45,7 +36,6 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ inputs.release_version }}
-      NEXT_VERSION: ${{ inputs.next_version }}
       RELEASE_CHANGES: ${{ inputs.changes }}
       GH_TOKEN: ${{ github.token }}
 
@@ -84,18 +74,20 @@ jobs:
           set -euo pipefail
           version_pattern='^[0-9][0-9A-Za-z.+:~_-]*$'
           [[ "$RELEASE_VERSION" =~ $version_pattern ]]
-          [[ "$NEXT_VERSION" =~ $version_pattern ]]
-          test "$RELEASE_VERSION" != "$NEXT_VERSION"
           test "$(cat VERSION)" = "$RELEASE_VERSION"
           test -n "${RELEASE_CHANGES//[[:space:]]/}"
           TAG_NAME="v$(printf '%s' "$RELEASE_VERSION" | tr '~' '-')"
           ASSET_VERSION="$(printf '%s' "$RELEASE_VERSION" | tr '~' '-')"
           ASSET_BASENAME="usbradioplus-$ASSET_VERSION.tar.xz"
           git check-ref-format "refs/tags/$TAG_NAME"
+          git fetch origin main --tags --force
+          RELEASE_COMMIT="$(git rev-parse HEAD)"
+          test "$RELEASE_COMMIT" = "$(git rev-parse origin/main)"
           printf 'TAG_NAME=%s\n' "$TAG_NAME" >> "$GITHUB_ENV"
           printf 'tag_name=%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
           printf 'ASSET_BASENAME=%s\n' "$ASSET_BASENAME" >> "$GITHUB_ENV"
-          git fetch --tags --force origin
+          printf 'RELEASE_COMMIT=%s\n' "$RELEASE_COMMIT" >> "$GITHUB_ENV"
+          printf '%s\n' "$RELEASE_CHANGES" > release-notes.md
           if git rev-parse --verify --quiet "refs/tags/$TAG_NAME"; then
             echo "Tag $TAG_NAME already exists." >&2
             exit 1
@@ -104,33 +96,6 @@ jobs:
             echo "Release $TAG_NAME already exists." >&2
             exit 1
           fi
-
-      - name: Prepare changelog and release commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          from datetime import date
-          from pathlib import Path
-
-          path = Path("CHANGELOG.md")
-          body = path.read_text(encoding="utf-8")
-          marker = "## Unreleased\n"
-          if marker not in body:
-              raise SystemExit("CHANGELOG.md has no Unreleased section")
-          changes = os.environ["RELEASE_CHANGES"].strip()
-          version = os.environ["RELEASE_VERSION"]
-          entry = f"## {version} - {date.today().isoformat()}\n\n{changes}\n\n"
-          before, after = body.split(marker, 1)
-          path.write_text(before + marker + "\n" + entry + after.lstrip(),
-                          encoding="utf-8")
-          Path("release-notes.md").write_text(changes + "\n", encoding="utf-8")
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          git commit -m "Release $RELEASE_VERSION"
 
       - name: Build and verify release archive
         shell: bash
@@ -141,90 +106,6 @@ jobs:
           test -f "dist/usbradioplus-$RELEASE_VERSION.tar.xz"
           cp "dist/usbradioplus-$RELEASE_VERSION.tar.xz" "dist/$ASSET_BASENAME"
           (cd dist && sha256sum "$ASSET_BASENAME" > "$ASSET_BASENAME.sha256")
-
-      - name: Prepare next development version
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$NEXT_VERSION" > VERSION
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          path = Path("debian/changelog")
-          body = path.read_text(encoding="utf-8")
-          first_line, separator, remainder = body.partition("\n")
-          match = re.fullmatch(r"(usbradioplus \()[^)]+(-[0-9]+\) .*)", first_line)
-          if match is None:
-              raise SystemExit("debian/changelog has an invalid first entry")
-          path.write_text(
-              f"{match.group(1)}{os.environ['NEXT_VERSION']}{match.group(2)}"
-              f"{separator}{remainder}",
-              encoding="utf-8",
-          )
-          PY
-          git add VERSION debian/changelog
-          git commit -m "Start $NEXT_VERSION development"
-
-      - name: Merge release bookkeeping through required checks
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          release_branch="automation/release-${TAG_NAME#v}-${GITHUB_RUN_ID}"
-          release_head="$(git rev-parse HEAD)"
-          git push origin "HEAD:refs/heads/$release_branch"
-
-          pr_url="$(gh pr create \
-            --base main \
-            --head "$release_branch" \
-            --title "Release $RELEASE_VERSION" \
-            --body "Update the changelog for $RELEASE_VERSION and start $NEXT_VERSION development.")"
-
-          find_run() {
-            workflow="$1"
-            run_id=""
-            for _attempt in $(seq 1 30); do
-              run_id="$(gh run list \
-                --workflow "$workflow" \
-                --branch "$release_branch" \
-                --limit 5 \
-                --json databaseId,headSha,event \
-                --jq ".[] | select(.headSha == \"$release_head\" and .event == \"pull_request\") | .databaseId" \
-                | head -n 1)"
-              if [[ -n "$run_id" ]]; then
-                printf '%s\n' "$run_id"
-                return 0
-              fi
-              sleep 2
-            done
-            echo "Timed out finding $workflow for $release_head" >&2
-            return 1
-          }
-
-          quality_run="$(find_run quality.yml)"
-          containers_run="$(find_run containers.yml)"
-          for run_id in "$quality_run" "$containers_run"; do
-            conclusion="$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
-              --jq '.conclusion // ""')"
-            if [[ "$conclusion" == "action_required" ]]; then
-              gh api --method POST \
-                "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/approve" \
-                >/dev/null
-            fi
-          done
-          gh run watch "$quality_run" --exit-status
-          gh run watch "$containers_run" --exit-status
-
-          gh pr merge "$pr_url" --rebase --delete-branch
-          git fetch origin main
-          git checkout --detach origin/main
-          test "$(cat VERSION)" = "$NEXT_VERSION"
-          release_commit="$(git rev-parse HEAD^)"
-          test "$(git show "$release_commit:VERSION")" = "$RELEASE_VERSION"
-          printf 'RELEASE_COMMIT=%s\n' "$release_commit" >> "$GITHUB_ENV"
 
       - name: Publish release tag
         shell: bash
