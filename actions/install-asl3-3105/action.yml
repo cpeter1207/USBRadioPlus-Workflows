@@ -8,6 +8,8 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y debhelper
         release_base='https://github.com/AllStarLink/asl3-asterisk/releases/download/22.10.1%2Basl3-3.10.5-1'
         expected_version='2:22.10.1+asl3-3.10.5-1.deb13'
         stage=$(mktemp -d)
