@@ -147,7 +147,24 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$NEXT_VERSION" > VERSION
-          git add VERSION
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("debian/changelog")
+          body = path.read_text(encoding="utf-8")
+          first_line, separator, remainder = body.partition("\n")
+          match = re.fullmatch(r"(usbradioplus \()[^)]+(-[0-9]+\) .*)", first_line)
+          if match is None:
+              raise SystemExit("debian/changelog has an invalid first entry")
+          path.write_text(
+              f"{match.group(1)}{os.environ['NEXT_VERSION']}{match.group(2)}"
+              f"{separator}{remainder}",
+              encoding="utf-8",
+          )
+          PY
+          git add VERSION debian/changelog
           git commit -m "Start $NEXT_VERSION development"
 
       - name: Merge release bookkeeping through required checks
