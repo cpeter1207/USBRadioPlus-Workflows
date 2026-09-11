@@ -44,7 +44,7 @@ jobs:
           RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
           export PATH="/opt/usbradioplus-quality/bin:$PATH"
-          make build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so
+          make "$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so"
           set +e
           make lint & lint_pid=$!
           make static-analysis & static_pid=$!
