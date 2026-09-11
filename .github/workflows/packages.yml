@@ -120,19 +120,28 @@ jobs:
           test "$(git -C "$ring_source" describe --exact-match --tags HEAD)" = \
             "$RATE_ADJUSTING_PCM_RING_TAG"
           test -z "$(git -C "$ring_source" status --porcelain)"
-          cd "$ring_source"
+          ring_package_dir=$(mktemp -d /tmp/rate-adjusting-pcm-ring.XXXXXX)
+          ring_build="$ring_package_dir/source"
+          mkdir "$ring_build"
+          git -C "$ring_source" archive "$RATE_ADJUSTING_PCM_RING_TAG" \
+            > "$ring_package_dir/source.tar"
+          tar -xf "$ring_package_dir/source.tar" -C "$ring_build"
+          rm -f "$ring_package_dir/source.tar"
+          cd "$ring_build"
           dch --newversion "$RATE_ADJUSTING_PCM_RING_VERSION-1.deb${{ matrix.debian }}" \
             --distribution "${{ matrix.suite }}" \
             "Build for Debian ${{ matrix.debian }}."
           dpkg-buildpackage -b -us -uc
-          lintian --fail-on error ../rate-adjusting-pcm-ring_*.changes
-          dpkg -i ../librate-adjusting-pcm-ring1_*.deb \
-            ../librate-adjusting-pcm-ring-dev_*.deb
+          lintian --fail-on error "$ring_package_dir"/rate-adjusting-pcm-ring_*.changes
+          dpkg -i "$ring_package_dir"/librate-adjusting-pcm-ring1_*.deb \
+            "$ring_package_dir"/librate-adjusting-pcm-ring-dev_*.deb
           test "$(dpkg-query -W -f='${db:Status-Status}' \
             librate-adjusting-pcm-ring1)" = installed
           pkg-config --exists rate_adjusting_pcm_ring
           test "$(pkg-config --modversion rate_adjusting_pcm_ring)" = \
             "$RATE_ADJUSTING_PCM_RING_VERSION"
+          test -z "$(git -C "$ring_source" status --porcelain)"
+          printf 'RING_PACKAGE_DIR=%s\n' "$ring_package_dir" >> "$GITHUB_ENV"
       - name: Build RNNoise companion packages
         run: |
           set -eux
@@ -185,8 +194,8 @@ jobs:
           # with the same package name.
           if test '${{ matrix.requested_api }}' != modern; then
             cp /tmp/librnnoise0_*.deb /tmp/librnnoise-dev_*.deb package-output/
-            cp dependencies/librate-adjusting-pcm-ring1_*.deb \
-              dependencies/librate-adjusting-pcm-ring-dev_*.deb package-output/
+            cp "$RING_PACKAGE_DIR"/librate-adjusting-pcm-ring1_*.deb \
+              "$RING_PACKAGE_DIR"/librate-adjusting-pcm-ring-dev_*.deb package-output/
           fi
           find .. -maxdepth 1 -name "$binary_package-dbgsym_*.deb" \
             -exec cp -t package-output {} +
