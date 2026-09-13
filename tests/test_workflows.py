@@ -1,8 +1,10 @@
 """Check release matrix boundaries and shell programs embedded in actions."""
 
 import json
+import os
 import re
 import subprocess
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -61,6 +63,59 @@ class WorkflowContracts(unittest.TestCase):
                 with self.subTest(action=path.parent.name, script=index):
                     subprocess.run(["shellcheck", "--shell=bash", "-"],
                                    input=textwrap.dedent(script), text=True, check=True)
+
+
+    def test_rnnoise_package_install_retires_only_unowned_bootstrap_files(self):
+        source = (ROOT / "actions/install-rnnoise-packages/action.yml").read_text()
+        cleanup = textwrap.dedent(re.search(
+            r"(?ms)^        for bootstrap in \\\n.*?^        done$", source
+        ).group(0))
+        expected = {
+            "/usr/local/lib/librnnoise.so",
+            "/usr/local/lib/librnnoise.so.0",
+            "/usr/local/lib/librnnoise.so.0.4.1",
+            "/usr/local/lib/librnnoise.a",
+            "/usr/local/lib/librnnoise.la",
+            "/usr/local/lib/pkgconfig/rnnoise.pc",
+            "/usr/local/include/rnnoise.h",
+        }
+        self.assertEqual(set(re.findall(r"/usr/local/[\w./]+", cleanup)), expected)
+        self.assertLess(source.index("dpkg -i"), source.index("for bootstrap in"))
+        self.assertLess(source.index("${db:Status-Status}"), source.index("for bootstrap in"))
+        self.assertIn('pkg-config --variable=libdir rnnoise', source)
+        self.assertIn('pkg-config --variable=pcfiledir rnnoise', source)
+        self.assertIn('dpkg-query -S "$package_libdir/librnnoise.so.0"', source)
+        self.assertIn('ldconfig -p', source)
+        self.assertIn('readlink -f "$resolved_library"', source)
+        for package_owned in (False, True):
+            with self.subTest(package_owned=package_owned), tempfile.TemporaryDirectory() as work:
+                directory = Path(work)
+                local = directory / "usr/local"
+                files = [directory / name.lstrip("/") for name in expected]
+                for path in files:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("bootstrap")
+                broken = local / "lib/librnnoise.so"
+                broken.unlink()
+                broken.symlink_to("missing-bootstrap-target")
+                unrelated = local / "lib/libunrelated.so"
+                unrelated.write_text("preserve")
+                commands = directory / "bin"
+                commands.mkdir()
+                query = commands / "dpkg-query"
+                query.write_text('#!/bin/sh\ntest "$OWN_BOOTSTRAP" = 1\n')
+                query.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-c", cleanup.replace("/usr/local", str(local))],
+                    env=dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
+                             OWN_BOOTSTRAP=str(int(package_owned))),
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(result.returncode, 1 if package_owned else 0, result.stderr)
+                self.assertEqual(unrelated.read_text(), "preserve")
+                for path in files:
+                    self.assertEqual(path.exists() or path.is_symlink(), package_owned, path)
+
 
     def test_repository_omits_both_obsolete_asl3105_packages(self):
         source = (ROOT / ".github/workflows/packages.yml").read_text()
