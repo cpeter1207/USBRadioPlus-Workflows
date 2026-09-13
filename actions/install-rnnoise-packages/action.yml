@@ -27,7 +27,7 @@ runs:
         set -euo pipefail
         apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y \
-          build-essential debhelper dh-autoreconf devscripts lintian wget
+          build-essential debhelper dh-autoreconf devscripts lintian pkg-config wget
         package_directory=$(mktemp -d /tmp/usbradioplus-rnnoise-packages.XXXXXX)
         wget -qO "$package_directory/rnnoise.tar.gz" \
           https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz
@@ -42,4 +42,34 @@ runs:
         dpkg-buildpackage -b -us -uc
         lintian --fail-on error ../rnnoise_*.changes
         dpkg -i ../librnnoise0_*.deb ../librnnoise-dev_*.deb
+        for package in librnnoise0 librnnoise-dev; do
+          test "$(dpkg-query -W -f='${db:Status-Status}' "$package")" = installed
+        done
+        # The quality image bootstraps v0.2 before Debian packages are available.
+        # Retire only those known, unpackaged files after installing their replacements;
+        # otherwise /usr/local shadows both pkg-config and the runtime loader.
+        for bootstrap in \
+          /usr/local/lib/librnnoise.so \
+          /usr/local/lib/librnnoise.so.0 \
+          /usr/local/lib/librnnoise.so.0.4.1 \
+          /usr/local/lib/librnnoise.a \
+          /usr/local/lib/librnnoise.la \
+          /usr/local/lib/pkgconfig/rnnoise.pc \
+          /usr/local/include/rnnoise.h; do
+          if test -e "$bootstrap" || test -L "$bootstrap"; then
+            if dpkg-query -S "$bootstrap" >/dev/null 2>&1; then
+              echo "Refusing to remove package-owned bootstrap path: $bootstrap" >&2
+              exit 1
+            fi
+            rm -f -- "$bootstrap"
+          fi
+        done
+        ldconfig
+        package_libdir="/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+        test "$(pkg-config --variable=libdir rnnoise)" = "$package_libdir"
+        test "$(pkg-config --variable=pcfiledir rnnoise)" = "$package_libdir/pkgconfig"
+        dpkg-query -S "$package_libdir/librnnoise.so.0" | grep -E '^librnnoise0(:[^: ]+)?: '
+        resolved_library=$(ldconfig -p | awk '$1 == "librnnoise.so.0" && !found { print $NF; found = 1 }')
+        test "$(readlink -f "$resolved_library")" = \
+          "$(readlink -f "$package_libdir/librnnoise.so.0")"
         printf 'package_directory=%s\n' "$package_directory" >> "$GITHUB_OUTPUT"
