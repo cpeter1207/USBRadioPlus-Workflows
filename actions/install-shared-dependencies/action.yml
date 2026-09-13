@@ -49,6 +49,7 @@ runs:
           for package in "$@"; do
             asset=$(jq -er --arg package "$package" --arg architecture "$architecture" '
               [.assets[] | select(.name | startswith($package + "_")) |
+                select(.name | contains("_debian12_") | not) |
                 select(.name | endswith("_" + $architecture + ".deb"))] |
               if length == 1 then .[0] else error("missing or ambiguous package asset") end
             ' <<< "$metadata")

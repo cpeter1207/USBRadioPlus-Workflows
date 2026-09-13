@@ -62,6 +62,32 @@ class WorkflowContracts(unittest.TestCase):
                     subprocess.run(["shellcheck", "--shell=bash", "-"],
                                    input=textwrap.dedent(script), text=True, check=True)
 
+    def test_release_asset_selector_rejects_debian12_and_retains_both_ring_abis(self):
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.S).group(1)
+        self.assertIn("rate_adjusting_pcm_ring v1.0.1", source)
+        self.assertIn("rate_adjusting_pcm_ring v2.0.0-alpha.1", source)
+        for architecture in ("amd64", "arm64"):
+            for package, version in (
+                ("librate-adjusting-pcm-ring1", "1.0.1-1_debian13"),
+                ("librate-adjusting-pcm-ring2", "2.0.0.alpha1-1"),
+            ):
+                expected = f"{package}_{version}_{architecture}.deb"
+                metadata = {"assets": [
+                    {"name": expected},
+                    {"name": f"{package}_1.0.1-1_debian12_{architecture}.deb"},
+                    {"name": f"{package}_{version}_wrongarch.deb"},
+                    {"name": f"unrelated_{version}_{architecture}.deb"},
+                ]}
+                with self.subTest(package=package, architecture=architecture):
+                    result = subprocess.run(
+                        ["jq", "-er", "--arg", "package", package,
+                         "--arg", "architecture", architecture, selector],
+                        input=json.dumps(metadata), text=True, check=True,
+                        capture_output=True,
+                    )
+                    self.assertEqual(json.loads(result.stdout)["name"], expected)
+
 
 if __name__ == "__main__":
     unittest.main()
