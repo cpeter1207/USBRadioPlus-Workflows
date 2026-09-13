@@ -1,0 +1,88 @@
+name: Install released USBRadioPlus shared dependencies
+description: Download digest-verified Debian 13 shared-library releases and optionally install them.
+
+inputs:
+  install:
+    description: Install the downloaded Debian packages in the current container.
+    default: 'true'
+  package-directory:
+    description: Directory retaining the release packages for publishing or a Docker build context.
+    default: dependencies/packages
+
+outputs:
+  package-directory:
+    description: Absolute path containing the verified Debian packages.
+    value: ${{ steps.dependencies.outputs.package_directory }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install download tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v gh >/dev/null || ! command -v jq >/dev/null || ! command -v curl >/dev/null; then
+          privilege=()
+          if [[ "$(id -u)" != 0 ]]; then privilege=(sudo); fi
+          "${privilege[@]}" apt-get update
+          "${privilege[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gh jq
+        fi
+    - name: Download released shared libraries
+      id: dependencies
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REQUESTED_PACKAGE_DIRECTORY: ${{ inputs.package-directory }}
+        INSTALL_PACKAGES: ${{ inputs.install }}
+      run: |
+        set -euo pipefail
+        architecture=$(dpkg --print-architecture)
+        case "$architecture" in amd64|arm64) ;; *) exit 1 ;; esac
+        mkdir -p "$REQUESTED_PACKAGE_DIRECTORY"
+        package_directory=$(cd "$REQUESTED_PACKAGE_DIRECTORY" && pwd)
+        download_release() {
+          repository=$1
+          tag=$2
+          shift 2
+          metadata=$(gh api "repos/cpeter1207/$repository/releases/tags/$tag")
+          test "$(jq -r .draft <<< "$metadata")" = false
+          for package in "$@"; do
+            asset=$(jq -er --arg package "$package" --arg architecture "$architecture" '
+              [.assets[] | select(.name | startswith($package + "_")) |
+                select(.name | endswith("_" + $architecture + ".deb"))] |
+              if length == 1 then .[0] else error("missing or ambiguous package asset") end
+            ' <<< "$metadata")
+            filename=$(jq -r .name <<< "$asset")
+            digest=$(jq -er '.digest | select(startswith("sha256:"))' <<< "$asset")
+            curl --fail --location --silent --show-error --retry 3 \
+              "$(jq -r .browser_download_url <<< "$asset")" \
+              --output "$package_directory/$filename"
+            printf '%s  %s\n' "${digest#sha256:}" "$package_directory/$filename" | sha256sum -c -
+            test "$(dpkg-deb -f "$package_directory/$filename" Package)" = "$package"
+            test "$(dpkg-deb -f "$package_directory/$filename" Architecture)" = "$architecture"
+          done
+        }
+        # The tested channel uses ABI 1. The audio adapter privately uses ABI 2;
+        # install both SONAMEs without changing the channel's ring implementation.
+        download_release rate_adjusting_pcm_ring v1.0.1 \
+          librate-adjusting-pcm-ring1 librate-adjusting-pcm-ring-dev
+        download_release rate_adjusting_pcm_ring v2.0.0-alpha.1 \
+          librate-adjusting-pcm-ring2 librate-adjusting-pcm-ring2-dev
+        download_release librptadvradio v0.1.0-alpha.1 librptadvradio1 librptadvradio-dev
+        download_release rptadv-samplerate-adapter v0.1.0-alpha.1 \
+          librptadv-samplerate-adapter1 librptadv-samplerate-adapter-dev
+        download_release rptadv-ffmpeg-adapter v0.1.0-alpha.1 \
+          librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev
+        download_release rptadv-portaudio-alsa-adapter v0.1.0-alpha.2 \
+          librptadv-portaudio-alsa-adapter1 librptadv-portaudio-alsa-adapter-dev
+        download_release rptadv-gpio-adapter v0.1.0-alpha.1 \
+          librptadv-gpio-adapter1 librptadv-gpio-adapter-dev
+        if [[ "$INSTALL_PACKAGES" == true ]]; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y "$package_directory"/*.deb
+          ldconfig
+          pkg-config --exists rate_adjusting_pcm_ring rptadvradio \
+            rptadv_samplerate_adapter rptadv_ffmpeg_adapter \
+            rptadv_portaudio_alsa_adapter rptadv_gpio_adapter
+        fi
+        printf 'package_directory=%s\n' "$package_directory" >> "$GITHUB_OUTPUT"

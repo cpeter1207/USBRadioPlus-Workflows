@@ -22,6 +22,21 @@ change reaches `main`. Release metadata and the following development-version bu
 ordinary, separately validated pull requests; release automation does not make
 or merge bookkeeping commits.
 
+USBRadioPlus has one Debian binary package, `usbradioplus`, built against
+ASL3 3.9.3. On each native Debian 13 architecture the pull-request gate loads
+the identical package under ASL3 3.9.3 and 3.10.5 and verifies the module hash
+does not change. Those exact runtime alternatives are recorded in the package;
+there is no legacy/modern package selection or resource-module header staging.
+Both release workflows verify the merged source's completed pull-request gates
+before building artifacts, and never repeat the production coverage gate.
+
+Shared adapters are installed from versioned releases after checking GitHub's
+SHA-256 asset digests. The module retains ring ABI 1 from v1.0.1, while the
+PortAudio adapter's ring ABI 2 from v2.0.0-alpha.1 is installed alongside it.
+Container builds receive these same released packages as the `shared_packages`
+build context. Each library's independent repository owns its implementation,
+tests, packaging, and release gate.
+
 Automatic quality and release work runs on native Debian 13 only: amd64
 collects coverage, while amd64 and arm64 both run tests, builds, and staged
 installation checks. Debian 12 is aspirational and never runs automatically.

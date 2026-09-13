@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: write
+  checks: read
+  pull-requests: read
 
 concurrency:
   group: release
@@ -46,7 +48,7 @@ jobs:
           set -euo pipefail
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            ca-certificates wget git gh
+            ca-certificates wget git gh jq
 
       - name: Check out main with complete history
         uses: actions/checkout@v7
@@ -57,6 +59,12 @@ jobs:
       - name: Trust the checked-out workspace
         shell: bash
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Require the previously passed pull-request gate
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/verify-main-gate@main
+
+      - name: Install released shared dependencies
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-shared-dependencies@main
 
       - name: Install ASL3 repository and build dependencies
         shell: bash
@@ -102,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           make clean
-          make distcheck
+          make distcheck DISTCHECK_TEST_TARGET=
           test -f "dist/usbradioplus-$RELEASE_VERSION.tar.xz"
           cp "dist/usbradioplus-$RELEASE_VERSION.tar.xz" "dist/$ASSET_BASENAME"
           (cd dist && sha256sum "$ASSET_BASENAME" > "$ASSET_BASENAME.sha256")

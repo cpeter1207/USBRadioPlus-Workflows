@@ -24,6 +24,8 @@ on:
 
 permissions:
   contents: write
+  checks: read
+  pull-requests: read
   pages: write
   id-token: write
 
@@ -47,10 +49,10 @@ jobs:
           set -euo pipefail
           # Debian 12 remains available only when an explicit manual caller
           # requests it; ordinary releases publish Debian 13 artifacts alone.
-          build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"}]}'
-          verify_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"}]}'
+          build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm"}]}'
+          verify_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","asl":"3.9.3"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","asl":"3.10.5"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","asl":"3.9.3"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","asl":"3.10.5"}]}'
           if [[ "$INCLUDE_DEBIAN12" == "true" ]]; then
-            build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"auto"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","requested_api":"modern","target_asl_version":"2:22.10.1+asl3-3.10.5-1.deb13"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04","requested_api":"auto"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04-arm","requested_api":"auto"}]}'
+            build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04-arm"}]}'
           fi
           printf 'build_matrix=%s\n' "$build_matrix" >> "$GITHUB_OUTPUT"
           printf 'verify_matrix=%s\n' "$verify_matrix" >> "$GITHUB_OUTPUT"
@@ -60,13 +62,8 @@ jobs:
     env:
       DEBFULLNAME: USBRadioPlus Archive
       DEBEMAIL: cpeter1207@users.noreply.github.com
-      # Debian 12 is an explicit package-only compatibility build, not a test
-      # platform. Debian 13 continues to run its package test hooks.
-      DEB_BUILD_OPTIONS: ${{ matrix.debian == '12' && 'nocheck' || '' }}
-      # This packaging-only release retains the published ABI-major 1 ring
-      # implementation and supplies its Debian runtime/development packages.
-      RATE_ADJUSTING_PCM_RING_TAG: v1.0.1
-      RATE_ADJUSTING_PCM_RING_VERSION: "1.0.1"
+      # The merged source has already passed the full platform gate.
+      DEB_BUILD_OPTIONS: nocheck
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select_package_matrix.outputs.build_matrix) }}
@@ -76,140 +73,86 @@ jobs:
       - name: Install checkout tools
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates git
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates git gh jq
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_ref }}
-      - name: Check out released rate-adjusting PCM ring source
-        uses: actions/checkout@v7
-        with:
-          repository: cpeter1207/rate_adjusting_pcm_ring
-          ref: ${{ env.RATE_ADJUSTING_PCM_RING_TAG }}
-          path: dependencies/rate_adjusting_pcm_ring
-          persist-credentials: false
-      - name: Trust checked-out workspaces
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --global --add safe.directory \
-            "$GITHUB_WORKSPACE/dependencies/rate_adjusting_pcm_ring"
+          fetch-depth: 0
+      - name: Trust checked-out workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Require the previously passed pull-request gate
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/verify-main-gate@main
       - name: Install ASL3 repository and package tools
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y wget devscripts \
             debhelper dh-autoreconf build-essential pkg-config python3-pytest \
             lintian ladspa-sdk libsamplerate0-dev libavfilter-dev libavutil-dev \
-            libasound2-dev libusb-dev libusb-1.0-0-dev portaudio19-dev
+            libasound2-dev libusb-1.0-0-dev
           wget -qO /tmp/asl-repo.deb \
             "https://repo.allstarlink.org/public/asl-apt-repos.deb${{ matrix.debian }}_all.deb"
           dpkg -i /tmp/asl-repo.deb
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y asl3-asterisk-dev
-      - name: Preserve legacy ASL3 headers
-        if: matrix.requested_api == 'modern'
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            'asl3-asterisk-dev=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}'
+      - name: Install released shared dependencies
+        if: matrix.debian == '13'
+        id: shared
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-shared-dependencies@main
+      - name: Install manually published Debian 12 dependencies
+        if: matrix.debian == '12'
         run: |
-          mkdir -p /opt/asl-legacy/include/asterisk
-          cp /usr/include/asterisk/res_usbradio.h /usr/include/asterisk/rpt_chan_shared.h \
-            /opt/asl-legacy/include/asterisk/
-      - name: Install matching modern ASL3 runtime
-        if: matrix.requested_api == 'modern'
-        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
-      - name: Build and install rate-adjusting PCM ring packages
-        run: |
-          set -eux
-          ring_source="$GITHUB_WORKSPACE/dependencies/rate_adjusting_pcm_ring"
-          test "$(git -C "$ring_source" describe --exact-match --tags HEAD)" = \
-            "$RATE_ADJUSTING_PCM_RING_TAG"
-          test -z "$(git -C "$ring_source" status --porcelain)"
-          ring_package_dir=$(mktemp -d /tmp/rate-adjusting-pcm-ring.XXXXXX)
-          ring_build="$ring_package_dir/source"
-          mkdir "$ring_build"
-          git -C "$ring_source" archive "$RATE_ADJUSTING_PCM_RING_TAG" \
-            > "$ring_package_dir/source.tar"
-          tar -xf "$ring_package_dir/source.tar" -C "$ring_build"
-          rm -f "$ring_package_dir/source.tar"
-          cd "$ring_build"
-          dch --newversion "$RATE_ADJUSTING_PCM_RING_VERSION-1.deb${{ matrix.debian }}" \
-            --distribution "${{ matrix.suite }}" \
-            "Build for Debian ${{ matrix.debian }}."
-          dpkg-buildpackage -b -us -uc
-          lintian --fail-on error "$ring_package_dir"/rate-adjusting-pcm-ring_*.changes
-          dpkg -i "$ring_package_dir"/librate-adjusting-pcm-ring1_*.deb \
-            "$ring_package_dir"/librate-adjusting-pcm-ring-dev_*.deb
-          test "$(dpkg-query -W -f='${db:Status-Status}' \
-            librate-adjusting-pcm-ring1)" = installed
-          pkg-config --exists rate_adjusting_pcm_ring
-          test "$(pkg-config --modversion rate_adjusting_pcm_ring)" = \
-            "$RATE_ADJUSTING_PCM_RING_VERSION"
-          test -z "$(git -C "$ring_source" status --porcelain)"
-          printf 'RING_PACKAGE_DIR=%s\n' "$ring_package_dir" >> "$GITHUB_ENV"
-      - name: Build RNNoise companion packages
-        run: |
-          set -eux
-          wget -qO /tmp/rnnoise.tar.gz \
-            https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz
-          echo '90fce4b00b9ff24c08dbfe31b82ffd43bae383d85c5535676d28b0a2b11c0d37  /tmp/rnnoise.tar.gz' | sha256sum -c -
-          tar -C /tmp -xzf /tmp/rnnoise.tar.gz
-          cp -a packaging/rnnoise/debian /tmp/rnnoise-0.2/
-          cd /tmp/rnnoise-0.2
-          dch --newversion "0.2-1.deb${{ matrix.debian }}" \
-            --distribution "${{ matrix.suite }}" "Build for Debian ${{ matrix.debian }}."
-          dpkg-buildpackage -b -us -uc
-          lintian --fail-on error ../rnnoise_*.changes
-          dpkg -i ../librnnoise0_*.deb ../librnnoise-dev_*.deb
+          install -d /etc/apt/keyrings
+          install -m 0644 packaging/repository/usbradioplus-archive-keyring.gpg \
+            /etc/apt/keyrings/usbradioplus.gpg
+          printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/usbradioplus.gpg] https://cpeter1207.github.io/USBRadioPlus bookworm main' \
+            > /etc/apt/sources.list.d/usbradioplus.list
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            librate-adjusting-pcm-ring-dev librptadvradio-dev \
+            librptadv-samplerate-adapter-dev librptadv-ffmpeg-adapter-dev \
+            librptadv-portaudio-alsa-adapter-dev librptadv-gpio-adapter-dev
+      - name: Install RNNoise companion packages
+        id: rnnoise
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-rnnoise-packages@main
+        with:
+          debian: ${{ matrix.debian }}
+          suite: ${{ matrix.suite }}
       - name: Build USBRadioPlus package
         id: usbradioplus_build
         run: |
           set -eux
           package_version='${{ inputs.package_version }}'
           test -n "$package_version" || package_version=$(cat VERSION)
-          binary_package=usbradioplus
-          if test '${{ matrix.requested_api }}' = modern; then
-            test "$(dpkg-query -W -f='${Version}' asl3-asterisk)" = \
-              '${{ matrix.target_asl_version }}'
-            export ASL_RADIO_API=modern
-            export ASL_LEGACY_INCLUDEDIR=/opt/asl-legacy/include
-            export ASL_MODERN_INCLUDEDIR=/usr/include
-            binary_package=usbradioplus-asl3105
-            sed -i 's/^Package: usbradioplus$/Package: usbradioplus-asl3105/' debian/control
-            sed -i '/^Architecture: amd64 arm64$/a Conflicts: usbradioplus\nReplaces: usbradioplus' debian/control
-            sed -i 's|debian/usbradioplus |debian/usbradioplus-asl3105 |' debian/rules
-          fi
-          export DEB_BINARY_PACKAGE="$binary_package"
-          radio_api=$(make -s print-asl-radio-api)
           asl_version=$(dpkg-query -W -f='${Version}' asl3-asterisk)
-          app_rpt_version=$(printf '%s\n' "$asl_version" | \
-            sed -n 's/.*+asl3-\([0-9][0-9.]*\)-.*/\1/p')
-          test -n "$app_rpt_version"
-          asl_package_tag="${radio_api}.asl$(printf '%s' "$app_rpt_version" | tr -d '.')"
-          echo "radio_api=$radio_api" >> "$GITHUB_OUTPUT"
-          dch --newversion "$package_version-${{ inputs.package_revision }}.deb${{ matrix.debian }}+$asl_package_tag" \
+          test "$asl_version" = '2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}'
+          dch --newversion "$package_version-${{ inputs.package_revision }}.deb${{ matrix.debian }}" \
             --distribution "${{ matrix.suite }}" "Build for Debian ${{ matrix.debian }}."
           dpkg-buildpackage -b -us -uc
           lintian --fail-on error ../usbradioplus_*.changes
           mkdir -p package-output
-          cp ../"$binary_package"_*.deb package-output/
-          # The exact-version ARM build uses the same RNNoise binaries as the
-          # ordinary ARM build. The same applies to the released shared ring.
-          # Publish one copy so artifact merging cannot overwrite two files
-          # with the same package name.
-          if test '${{ matrix.requested_api }}' != modern; then
-            cp /tmp/librnnoise0_*.deb /tmp/librnnoise-dev_*.deb package-output/
-            cp "$RING_PACKAGE_DIR"/librate-adjusting-pcm-ring1_*.deb \
-              "$RING_PACKAGE_DIR"/librate-adjusting-pcm-ring-dev_*.deb package-output/
+          cp ../usbradioplus_*.deb package-output/
+          cp "${{ steps.rnnoise.outputs.package-directory }}"/librnnoise0_*.deb \
+            "${{ steps.rnnoise.outputs.package-directory }}"/librnnoise-dev_*.deb package-output/
+          if test '${{ matrix.debian }}' = 13; then
+            cp "${{ steps.shared.outputs.package-directory }}"/*.deb package-output/
           fi
-          find .. -maxdepth 1 -name "$binary_package-dbgsym_*.deb" \
+          find .. -maxdepth 1 -name 'usbradioplus-dbgsym_*.deb' \
             -exec cp -t package-output {} +
-          printf 'suite=%s\narchitecture=%s\nasl3_asterisk=%s\napp_rpt=%s\nradio_api=%s\n' \
+          printf 'suite=%s\narchitecture=%s\nasl3_build=%s\n' \
             '${{ matrix.suite }}' "$(dpkg --print-architecture)" \
-            "$asl_version" "$app_rpt_version" "$radio_api" > package-output/build-info.txt
-          test "$(dpkg-deb -f ../"$binary_package"_*.deb Depends | \
+            "$asl_version" > package-output/build-info.txt
+          test "$(dpkg-deb -f ../usbradioplus_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
-          test "$(dpkg-deb -f ../"$binary_package"_*.deb Depends | \
-            grep -c 'librate-adjusting-pcm-ring1')" = 1
-          test "$(dpkg-deb -f ../"$binary_package"_*.deb Package)" = "$binary_package"
+          test "$(dpkg-deb -f ../usbradioplus_*.deb Package)" = usbradioplus
+          for library in librate-adjusting-pcm-ring1 librptadvradio1 \
+            librptadv-samplerate-adapter1 librptadv-ffmpeg-adapter1 \
+            librptadv-portaudio-alsa-adapter1 librptadv-gpio-adapter1; do
+            dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"
+          done
       - uses: actions/upload-artifact@v7
         with:
-          name: packages-${{ matrix.suite }}-${{ runner.arch }}-${{ matrix.requested_api }}-${{ steps.usbradioplus_build.outputs.radio_api }}
+          name: packages-${{ matrix.suite }}-${{ runner.arch }}
           path: package-output/*
           if-no-files-found: error
 
@@ -294,6 +237,8 @@ jobs:
           done
           for package in "$INCOMING_DIR"/*.deb; do
             case "$package" in
+              */usbradioplus-asl3105_*) continue ;;
+              */librate-adjusting-pcm-ring*|*/librptadv*) suite=trixie ;;
               *.deb12_*|*.deb12+*_*)
                 if [[ "$INCLUDE_DEBIAN12" != "true" ]]; then
                   continue
@@ -361,20 +306,15 @@ jobs:
             "https://repo.allstarlink.org/public/asl-apt-repos.deb${{ matrix.debian }}_all.deb"
           dpkg -i /tmp/asl-repo.deb
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y asl3-asterisk
-      - name: Install matching modern ASL3 runtime
-        if: matrix.requested_api == 'modern'
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            'asl3-asterisk=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}'
+      - name: Install second supported ASL3 runtime
+        if: matrix.asl == '3.10.5'
         uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
       - name: Install from the published signed repository
         run: |
           set -eux
-          if test '${{ matrix.requested_api }}' = modern; then
-            test "$(dpkg-query -W -f='${Version}' asl3-asterisk)" = \
-              '${{ matrix.target_asl_version }}'
-            package=usbradioplus-asl3105
-          else
-            package=usbradioplus
-          fi
+          package=usbradioplus
           mkdir -p /tmp/config-before
           cp -a /etc/asterisk/modules.conf /etc/asterisk/rpt.conf /tmp/config-before/ 2>/dev/null || true
           for attempt in 1 2 3 4 5; do
