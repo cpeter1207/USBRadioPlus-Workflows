@@ -62,6 +62,31 @@ class WorkflowContracts(unittest.TestCase):
                     subprocess.run(["shellcheck", "--shell=bash", "-"],
                                    input=textwrap.dedent(script), text=True, check=True)
 
+    def test_repository_omits_both_obsolete_asl3105_packages(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        classifier = re.search(
+            r'(?ms)^            case "\$package" in\n.*?^            esac$', source
+        ).group(0)
+        retained = [
+            "/incoming/usbradioplus_0.1.0~alpha18-1.deb13_amd64.deb",
+            "/incoming/usbradioplus-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
+            "/incoming/librate-adjusting-pcm-ring1_1.0.1-1.deb13_amd64.deb",
+            "/incoming/librate-adjusting-pcm-ring2_2.0.0.alpha1-1_amd64.deb",
+            "/incoming/librptadv-portaudio-alsa-adapter1_0.1.0.alpha2-1_amd64.deb",
+        ]
+        obsolete = [
+            "/incoming/usbradioplus-asl3105_0.1.0~alpha17-1.deb13+modern.asl3105_arm64.deb",
+            "/incoming/usbradioplus-asl3105-dbgsym_0.1.0~alpha17-1.deb13+modern.asl3105_arm64.deb",
+        ]
+        script = ('set -eu\nINCLUDE_DEBIAN12=false\nfor package do\n'
+                  + textwrap.dedent(classifier)
+                  + '\nprintf "%s:%s\\n" "$package" "$suite"\ndone\n')
+        result = subprocess.run(
+            ["bash", "-c", script, "repository-classifier", *retained, *obsolete],
+            text=True, check=True, capture_output=True,
+        )
+        self.assertEqual(result.stdout.splitlines(), [f"{path}:trixie" for path in retained])
+
     def test_release_asset_selector_rejects_debian12_and_retains_both_ring_abis(self):
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.S).group(1)
