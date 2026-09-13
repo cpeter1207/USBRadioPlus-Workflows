@@ -1,0 +1,30 @@
+name: Verify previously tested main revision
+description: Require a merged main revision whose pull request passed both complete production gates.
+
+runs:
+  using: composite
+  steps:
+    - name: Verify merged source and completed pull-request gates
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        git fetch origin main
+        commit=$(git rev-parse HEAD)
+        git merge-base --is-ancestor "$commit" origin/main
+        metadata=$(gh api "repos/$GITHUB_REPOSITORY/commits/$commit/pulls")
+        head=$(jq -er --arg commit "$commit" '
+          [.[] | select(.merged_at != null and .base.ref == "main" and
+            .merge_commit_sha == $commit)] |
+          if length == 1 then .[0].head.sha else error("source is not a merged main revision") end
+        ' <<< "$metadata")
+        checks=$(gh api --paginate --slurp \
+          "repos/$GITHUB_REPOSITORY/commits/$head/check-runs?per_page=100" |
+          jq '[.[].check_runs[]]')
+        for gate in 'Required quality gate' 'Required container gate'; do
+          jq -e --arg gate "$gate" '
+            [.[] | select(.name | endswith($gate))] | sort_by(.id) | last |
+            .status == "completed" and .conclusion == "success"
+          ' <<< "$checks"
+        done

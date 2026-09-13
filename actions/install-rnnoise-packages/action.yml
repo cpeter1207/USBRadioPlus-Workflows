@@ -1,0 +1,45 @@
+name: Install RNNoise companion packages
+description: Build and install the checksum-pinned RNNoise companion Debian packages.
+
+inputs:
+  debian:
+    default: '13'
+  suite:
+    default: trixie
+
+outputs:
+  package-directory:
+    description: Directory containing the built companion packages.
+    value: ${{ steps.build.outputs.package_directory }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build RNNoise companion packages
+      id: build
+      shell: bash
+      env:
+        DEBIAN_VERSION: ${{ inputs.debian }}
+        DEBIAN_SUITE: ${{ inputs.suite }}
+        DEBFULLNAME: USBRadioPlus Archive
+        DEBEMAIL: cpeter1207@users.noreply.github.com
+      run: |
+        set -euo pipefail
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          build-essential debhelper dh-autoreconf devscripts lintian wget
+        package_directory=$(mktemp -d /tmp/usbradioplus-rnnoise-packages.XXXXXX)
+        wget -qO "$package_directory/rnnoise.tar.gz" \
+          https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz
+        printf '%s  %s\n' \
+          90fce4b00b9ff24c08dbfe31b82ffd43bae383d85c5535676d28b0a2b11c0d37 \
+          "$package_directory/rnnoise.tar.gz" | sha256sum -c -
+        tar -C "$package_directory" -xzf "$package_directory/rnnoise.tar.gz"
+        cp -a packaging/rnnoise/debian "$package_directory/rnnoise-0.2/"
+        cd "$package_directory/rnnoise-0.2"
+        dch --newversion "0.2-1.deb$DEBIAN_VERSION" --distribution "$DEBIAN_SUITE" \
+          "Build for Debian $DEBIAN_VERSION."
+        dpkg-buildpackage -b -us -uc
+        lintian --fail-on error ../rnnoise_*.changes
+        dpkg -i ../librnnoise0_*.deb ../librnnoise-dev_*.deb
+        printf 'package_directory=%s\n' "$package_directory" >> "$GITHUB_OUTPUT"

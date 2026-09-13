@@ -13,22 +13,15 @@ jobs:
     container: ghcr.io/cpeter1207/usbradioplus-quality-debian13:latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check out the shared playout ring
-        uses: actions/checkout@v7
-        with:
-          repository: cpeter1207/rate_adjusting_pcm_ring
-          ref: v1.0.1
-          path: dependencies/rate_adjusting_pcm_ring
+      - name: Install released shared dependencies
+        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-shared-dependencies@main
       - name: Trust workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Install matching modern ASL3 runtime
-        uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
+      - name: Verify baseline ASL3 runtime
+        run: test "$(dpkg-query -W -f='${Version}' asl3-asterisk)" = '2:22.9.0+asl3-3.9.3-1.deb13'
       - name: Run formatting, lint, and static analysis concurrently
-        env:
-          RPCR_SOURCE: ${{ github.workspace }}/dependencies/rate_adjusting_pcm_ring
         run: |
           export PATH="/opt/usbradioplus-quality/bin:$PATH"
-          make "$GITHUB_WORKSPACE/build/rpcr-stage/usr/lib/librate_adjusting_pcm_ring.so"
           set +e
           make lint & lint_pid=$!
           make static-analysis & static_pid=$!
