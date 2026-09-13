@@ -237,7 +237,7 @@ jobs:
           done
           for package in "$INCOMING_DIR"/*.deb; do
             case "$package" in
-              */usbradioplus-asl3105_*) continue ;;
+              */usbradioplus-asl3105_*|*/usbradioplus-asl3105-dbgsym_*) continue ;;
               */librate-adjusting-pcm-ring*|*/librptadv*) suite=trixie ;;
               *.deb12_*|*.deb12+*_*)
                 if [[ "$INCLUDE_DEBIAN12" != "true" ]]; then
