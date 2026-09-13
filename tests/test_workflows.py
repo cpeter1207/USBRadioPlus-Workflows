@@ -64,6 +64,64 @@ class WorkflowContracts(unittest.TestCase):
                     subprocess.run(["shellcheck", "--shell=bash", "-"],
                                    input=textwrap.dedent(script), text=True, check=True)
 
+    def test_main_gate_uses_portable_pagination_and_latest_required_checks(self):
+        source = (ROOT / "actions/verify-main-gate/action.yml").read_text()
+        script = textwrap.dedent(re.search(
+            r"(?m)^      run: \|\n((?:        .*\n|\n)+)", source
+        ).group(1))
+        self.assertNotIn("--slurp", script)
+        commands = r'''
+git() {
+    case "$*" in
+        'fetch origin main'|'merge-base --is-ancestor merged-sha origin/main') ;;
+        'rev-parse HEAD') printf 'merged-sha\n' ;;
+        *) return 90 ;;
+    esac
+}
+gh() {
+    test "$1" = api || return 91
+    if test "$2" = --paginate; then
+        # Model the Debian CLI: pagination works, but --slurp is unsupported.
+        test "$#" -eq 3 || return 92
+        test "$3" = 'repos/example/source/commits/tested-head/check-runs?per_page=100' || return 93
+        printf '%s\n' "$GATE_PAGES"
+    else
+        test "$#" -eq 2 || return 94
+        test "$2" = 'repos/example/source/commits/merged-sha/pulls' || return 95
+        printf '%s\n' '[{"merged_at":"2026-09-13","base":{"ref":"main"},"merge_commit_sha":"merged-sha","head":{"sha":"tested-head"}}]'
+    fi
+}
+'''
+        quality = "quality / Required quality gate"
+        container = "containers / Required container gate"
+
+        def check(identifier, name, conclusion, status="completed"):
+            return dict(id=identifier, name=name, conclusion=conclusion, status=status)
+
+        older = [check(1, quality, "failure"), check(2, container, "failure")]
+        scenarios = (
+            ("latest success", older,
+             [check(5, container, "success"), check(4, quality, "success")], True),
+            ("latest quality failure", [check(1, quality, "success")],
+             [check(5, container, "success"), check(4, quality, "failure")], False),
+            ("latest container failure", [check(2, container, "success")],
+             [check(5, container, "failure"), check(4, quality, "success")], False),
+            ("incomplete quality", older,
+             [check(5, container, "success"), check(4, quality, "success", "in_progress")], False),
+            ("missing quality", [], [check(5, container, "success")], False),
+            ("missing container", [], [check(4, quality, "success")], False),
+            ("no checks", [], [], False),
+        )
+        for name, first, second, expected in scenarios:
+            with self.subTest(name=name):
+                pages = "\n".join(json.dumps(dict(check_runs=page)) for page in (first, second))
+                result = subprocess.run(
+                    ["bash", "-c", commands + script],
+                    env=dict(os.environ, GITHUB_REPOSITORY="example/source", GATE_PAGES=pages),
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
+
 
     def test_rnnoise_package_install_retires_only_unowned_bootstrap_files(self):
         source = (ROOT / "actions/install-rnnoise-packages/action.yml").read_text()
