@@ -19,9 +19,9 @@ runs:
             .merge_commit_sha == $commit)] |
           if length == 1 then .[0].head.sha else error("source is not a merged main revision") end
         ' <<< "$metadata")
-        checks=$(gh api --paginate --slurp \
+        checks=$(gh api --paginate \
           "repos/$GITHUB_REPOSITORY/commits/$head/check-runs?per_page=100" |
-          jq '[.[].check_runs[]]')
+          jq -s '[.[].check_runs[]]')
         for gate in 'Required quality gate' 'Required container gate'; do
           jq -e --arg gate "$gate" '
             [.[] | select(.name | endswith($gate))] | sort_by(.id) | last |
