@@ -31,8 +31,7 @@ Both release workflows verify the merged source's completed pull-request gates
 before building artifacts, and never repeat the production coverage gate.
 
 Shared adapters are installed from versioned releases after checking GitHub's
-SHA-256 asset digests. The module retains ring ABI 1 from v1.0.1, while the
-PortAudio adapter's ring ABI 2 from v2.0.0-alpha.1 is installed alongside it.
+SHA-256 asset digests. The module uses ring ABI 2 from v2.0.0-alpha.3.
 Container builds receive these same released packages as the `shared_packages`
 build context. Each library's independent repository owns its implementation,
 tests, packaging, and release gate.
