@@ -17,15 +17,15 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install download tools
+    - name: Install action prerequisites
       shell: bash
       run: |
         set -euo pipefail
-        if ! command -v gh >/dev/null || ! command -v jq >/dev/null || ! command -v curl >/dev/null; then
+        if ! command -v gh >/dev/null || ! command -v jq >/dev/null || ! command -v curl >/dev/null || ! command -v pkg-config >/dev/null; then
           privilege=()
           if [[ "$(id -u)" != 0 ]]; then privilege=(sudo); fi
           "${privilege[@]}" apt-get update
-          "${privilege[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gh jq
+          "${privilege[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gh jq pkg-config
         fi
     - name: Download released shared libraries
       id: dependencies
