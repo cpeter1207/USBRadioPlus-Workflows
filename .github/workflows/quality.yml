@@ -72,7 +72,7 @@ jobs:
             make distcheck DISTCHECK_TEST_TARGET=
           fi
       - name: Upload Debian 13 amd64 coverage
-        if: ${{ matrix.verification == 'coverage' }}
+        if: ${{ matrix.verification == 'coverage' && always() }}
         uses: actions/upload-artifact@v7
         with:
           name: coverage-debian${{ matrix.debian }}-${{ matrix.arch }}
