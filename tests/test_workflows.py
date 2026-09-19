@@ -61,6 +61,14 @@ class WorkflowContracts(unittest.TestCase):
         self.assertNotIn("res_usbradio", source)
         self.assertNotIn("ASL_LEGACY_INCLUDEDIR", source)
 
+    def test_quality_install_resolves_declared_runtime_dependencies(self):
+        source = (ROOT / ".github/workflows/quality.yml").read_text()
+        self.assertIn(
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y ../usbradioplus_*.deb",
+            source,
+        )
+        self.assertNotIn("dpkg -i ../usbradioplus_*.deb", source)
+
     def test_composite_action_shell_programs(self):
         for path in sorted((ROOT / "actions").glob("*/action.yml")):
             source = path.read_text()
