@@ -15,6 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 class WorkflowContracts(unittest.TestCase):
     """Protect native platform coverage and the single-package release path."""
 
+    def test_quality_image_bootstrap_has_no_release_dependency_cycle(self):
+        source = (ROOT / ".github/workflows/containers.yml").read_text()
+        quality = source.split("  build-quality:\n", 1)[1].split("  quality-manifest:", 1)[0]
+        self.assertIn("target: quality", quality)
+        self.assertNotIn("install-shared-dependencies", quality)
+        self.assertNotIn("shared_packages=", quality)
+
     def test_package_matrix_builds_once_per_architecture(self):
         source = (ROOT / ".github/workflows/packages.yml").read_text()
         builds = [json.loads(value)["include"] for value in re.findall(
@@ -186,6 +193,8 @@ gh() {
             "/incoming/librate-adjusting-pcm-ring1_1.0.1-1.deb13_amd64.deb",
             "/incoming/librate-adjusting-pcm-ring2_2.0.0.alpha1-1_amd64.deb",
             "/incoming/librptadv-portaudio-alsa-adapter1_0.1.0.alpha2-1_amd64.deb",
+            "/incoming/librnnoise0_0.2-1_amd64.deb",
+            "/incoming/librnnoise-dev_0.2-1_arm64.deb",
         ]
         obsolete = [
             "/incoming/usbradioplus-asl3105_0.1.0~alpha17-1.deb13+modern.asl3105_arm64.deb",
@@ -200,15 +209,22 @@ gh() {
         )
         self.assertEqual(result.stdout.splitlines(), [f"{path}:trixie" for path in retained])
 
-    def test_release_asset_selector_rejects_debian12_and_retains_both_ring_abis(self):
+    def test_release_asset_selector_rejects_debian12_and_uses_current_abis(self):
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.S).group(1)
-        self.assertIn("rate_adjusting_pcm_ring v1.0.1", source)
-        self.assertIn("rate_adjusting_pcm_ring v2.0.0-alpha.1", source)
+        self.assertNotIn("librate-adjusting-pcm-ring1", source)
+        self.assertIn("rate_adjusting_pcm_ring v2.0.0-alpha.3", source)
+        self.assertIn("librptadvradio4", source)
+        self.assertIn("librptadv-portaudio-alsa-adapter2", source)
+        self.assertIn("librptadv-rnnoise-adapter1", source)
+        self.assertIn("librnnoise0 librnnoise-dev", source)
         for architecture in ("amd64", "arm64"):
             for package, version in (
-                ("librate-adjusting-pcm-ring1", "1.0.1-1_debian13"),
-                ("librate-adjusting-pcm-ring2", "2.0.0.alpha1-1"),
+                ("librate-adjusting-pcm-ring2", "2.0.0.alpha3-1"),
+                ("librptadvradio4", "0.1.0.alpha5-1"),
+                ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha2-1"),
+                ("librptadv-rnnoise-adapter1", "0.1.0.alpha2-1"),
+                ("librnnoise0", "0.2-1"),
             ):
                 expected = f"{package}_{version}_{architecture}.deb"
                 metadata = {"assets": [

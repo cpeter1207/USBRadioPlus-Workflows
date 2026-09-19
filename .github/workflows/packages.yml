@@ -86,7 +86,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y wget devscripts \
-            debhelper dh-autoreconf build-essential pkg-config python3-pytest \
+            debhelper dh-autoreconf build-essential cargo rustc libclang-dev pkg-config python3-pytest \
             lintian ladspa-sdk libsamplerate0-dev libavfilter-dev libavutil-dev \
             libasound2-dev libusb-1.0-0-dev
           wget -qO /tmp/asl-repo.deb \
@@ -109,9 +109,10 @@ jobs:
             > /etc/apt/sources.list.d/usbradioplus.list
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            librate-adjusting-pcm-ring-dev librptadvradio-dev \
+            librate-adjusting-pcm-ring2-dev librptadvradio-dev \
             librptadv-samplerate-adapter-dev librptadv-ffmpeg-adapter-dev \
-            librptadv-portaudio-alsa-adapter-dev librptadv-gpio-adapter-dev
+            librptadv-portaudio-alsa-adapter-dev librptadv-gpio-adapter-dev \
+            librptadv-rnnoise-adapter-dev
       - name: Install RNNoise companion packages
         id: rnnoise
         uses: cpeter1207/USBRadioPlus-Workflows/actions/install-rnnoise-packages@main
@@ -145,9 +146,10 @@ jobs:
           test "$(dpkg-deb -f ../usbradioplus_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
           test "$(dpkg-deb -f ../usbradioplus_*.deb Package)" = usbradioplus
-          for library in librate-adjusting-pcm-ring1 librptadvradio1 \
+          for library in librate-adjusting-pcm-ring2 librptadvradio4 \
             librptadv-samplerate-adapter1 librptadv-ffmpeg-adapter1 \
-            librptadv-portaudio-alsa-adapter1 librptadv-gpio-adapter1; do
+            librptadv-portaudio-alsa-adapter2 librptadv-gpio-adapter1 \
+            librptadv-rnnoise-adapter1; do
             dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"
           done
       - uses: actions/upload-artifact@v7
@@ -238,7 +240,7 @@ jobs:
           for package in "$INCOMING_DIR"/*.deb; do
             case "$package" in
               */usbradioplus-asl3105_*|*/usbradioplus-asl3105-dbgsym_*) continue ;;
-              */librate-adjusting-pcm-ring*|*/librptadv*) suite=trixie ;;
+              */librate-adjusting-pcm-ring*|*/librptadv*|*/librnnoise*_0.2-1_*) suite=trixie ;;
               *.deb12_*|*.deb12+*_*)
                 if [[ "$INCLUDE_DEBIAN12" != "true" ]]; then
                   continue
@@ -331,16 +333,16 @@ jobs:
           test -x /usr/sbin/usbradioplus-tune
           test -f /usr/share/man/man7/usbradioplus.7.gz
           test "$(dpkg-query -W -f='${db:Status-Status}' \
-            librate-adjusting-pcm-ring1)" = installed
-          ring_library=$(dpkg-query -L librate-adjusting-pcm-ring1 | \
-            sed -n '/\/librate_adjusting_pcm_ring\.so\.1$/ { p; q; }')
+            librate-adjusting-pcm-ring2)" = installed
+          ring_library=$(dpkg-query -L librate-adjusting-pcm-ring2 | \
+            sed -n '/\/librate_adjusting_pcm_ring2\.so\.2$/ { p; q; }')
           test -n "$ring_library"
           test -f "$ring_library"
           ldd "$module_dir/chan_usbradioplus.so" | \
-            grep -F 'librate_adjusting_pcm_ring.so.1' | grep -Fv 'not found'
+            grep -F 'librate_adjusting_pcm_ring2.so.2' | grep -Fv 'not found'
           cmp -s /tmp/config-before/modules.conf /etc/asterisk/modules.conf 2>/dev/null || \
             test ! -e /tmp/config-before/modules.conf
           cmp -s /tmp/config-before/rpt.conf /etc/asterisk/rpt.conf 2>/dev/null || \
             test ! -e /tmp/config-before/rpt.conf
           dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
-            "$package" librnnoise0 librate-adjusting-pcm-ring1
+            "$package" librnnoise0 librate-adjusting-pcm-ring2
