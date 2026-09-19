@@ -63,27 +63,27 @@ runs:
             test "$(dpkg-deb -f "$package_directory/$filename" Architecture)" = "$architecture"
           done
         }
-        # The tested channel uses ABI 1. The audio adapter privately uses ABI 2;
-        # install both SONAMEs without changing the channel's ring implementation.
-        download_release rate_adjusting_pcm_ring v1.0.1 \
-          librate-adjusting-pcm-ring1 librate-adjusting-pcm-ring-dev
-        download_release rate_adjusting_pcm_ring v2.0.0-alpha.1 \
+        # Keep the channel and its independently released providers ABI-matched.
+        download_release rate_adjusting_pcm_ring v2.0.0-alpha.3 \
           librate-adjusting-pcm-ring2 librate-adjusting-pcm-ring2-dev
-        download_release librptadvradio v0.1.0-alpha.1 librptadvradio1 librptadvradio-dev
-        download_release rptadv-samplerate-adapter v0.1.0-alpha.1 \
+        download_release librptadvradio v0.1.0-alpha.5 librptadvradio4 librptadvradio-dev
+        download_release rptadv-samplerate-adapter v0.1.0-alpha.2 \
           librptadv-samplerate-adapter1 librptadv-samplerate-adapter-dev
-        download_release rptadv-ffmpeg-adapter v0.1.0-alpha.1 \
+        download_release rptadv-ffmpeg-adapter v0.1.0-alpha.2 \
           librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev
-        download_release rptadv-portaudio-alsa-adapter v0.1.0-alpha.2 \
-          librptadv-portaudio-alsa-adapter1 librptadv-portaudio-alsa-adapter-dev
-        download_release rptadv-gpio-adapter v0.1.0-alpha.1 \
+        download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.2 \
+          librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev
+        download_release rptadv-gpio-adapter v0.1.0-alpha.2 \
           librptadv-gpio-adapter1 librptadv-gpio-adapter-dev
+        download_release rptadv-rnnoise-adapter v0.1.0-alpha.2 \
+          librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev
         if [[ "$INSTALL_PACKAGES" == true ]]; then
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y "$package_directory"/*.deb
           ldconfig
-          pkg-config --exists rate_adjusting_pcm_ring rptadvradio \
+          pkg-config --exists rate_adjusting_pcm_ring2 rptadvradio \
             rptadv_samplerate_adapter rptadv_ffmpeg_adapter \
-            rptadv_portaudio_alsa_adapter rptadv_gpio_adapter
+            rptadv_portaudio_alsa_adapter rptadv_gpio_adapter rptadv_rnnoise_adapter
+          test "$(pkg-config --variable=abi_version rptadvradio)" = 4
         fi
         printf 'package_directory=%s\n' "$package_directory" >> "$GITHUB_OUTPUT"
