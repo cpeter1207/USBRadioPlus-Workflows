@@ -93,7 +93,11 @@ jobs:
             "https://repo.allstarlink.org/public/asl-apt-repos.deb${{ matrix.debian }}_all.deb"
           dpkg -i /tmp/asl-repo.deb
           apt-get update
+          # Pin the complete baseline set; APT may otherwise choose newer companions.
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            'asl3-asterisk=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}' \
+            'asl3-asterisk-config=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}' \
+            'asl3-asterisk-modules=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}' \
             'asl3-asterisk-dev=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}'
       - name: Install released shared dependencies
         if: matrix.debian == '13'
@@ -309,7 +313,9 @@ jobs:
           dpkg -i /tmp/asl-repo.deb
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            'asl3-asterisk=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}'
+            'asl3-asterisk=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}' \
+            'asl3-asterisk-config=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}' \
+            'asl3-asterisk-modules=2:22.9.0+asl3-3.9.3-1.deb${{ matrix.debian }}'
       - name: Install second supported ASL3 runtime
         if: matrix.asl == '3.10.5'
         uses: cpeter1207/USBRadioPlus-Workflows/actions/install-asl3-3105@main
