@@ -79,6 +79,51 @@ class WorkflowContracts(unittest.TestCase):
                     subprocess.run(["shellcheck", "--shell=bash", "-"],
                                    input=textwrap.dedent(script), text=True, check=True)
 
+    def test_shared_dependency_tools_install_missing_pkg_config(self):
+        """An otherwise prepared release container still needs pkg-config."""
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        script = textwrap.dedent(
+            re.search(r"(?m)^      run: \|\n((?:        .*\n|\n)+)", source).group(1)
+        )
+        for pkg_config_present in (False, True):
+            with (
+                self.subTest(pkg_config_present=pkg_config_present),
+                tempfile.TemporaryDirectory() as work,
+            ):
+                directory = Path(work)
+                for tool in ("gh", "jq", "curl"):
+                    (directory / tool).symlink_to("/bin/true")
+                if pkg_config_present:
+                    (directory / "pkg-config").symlink_to("/bin/true")
+                (directory / "env").symlink_to("/usr/bin/env")
+                for name, body in (
+                    ("id", "printf '0\\n'"),
+                    ("apt-get", 'printf "%s\\n" "$*" >> "$APT_LOG"'),
+                ):
+                    command = directory / name
+                    command.write_text(f"#!/bin/sh\n{body}\n")
+                    command.chmod(0o755)
+                log = directory / "apt.log"
+                result = subprocess.run(
+                    ["/bin/bash", "-c", script],
+                    env=dict(os.environ, PATH=str(directory), APT_LOG=str(log)),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                if pkg_config_present:
+                    self.assertFalse(log.exists())
+                else:
+                    self.assertTrue(
+                        log.exists(), "missing pkg-config must trigger installation"
+                    )
+                    calls = log.read_text().splitlines()
+                    self.assertEqual(len(calls), 2)
+                    self.assertEqual(calls[0], "update")
+                    self.assertEqual(calls[1].split()[:2], ["install", "-y"])
+                    self.assertIn("pkg-config", calls[1].split()[2:])
+
     def test_main_gate_uses_portable_pagination_and_latest_required_checks(self):
         source = (ROOT / "actions/verify-main-gate/action.yml").read_text()
         script = textwrap.dedent(re.search(
