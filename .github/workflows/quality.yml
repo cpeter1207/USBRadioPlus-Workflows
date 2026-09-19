@@ -84,7 +84,7 @@ jobs:
         run: |
           DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -b -us -uc
           lintian --fail-on error ../usbradioplus_*.changes
-          dpkg -i ../usbradioplus_*.deb
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ../usbradioplus_*.deb
           module=$(find /usr/lib -path '*/asterisk/modules/chan_usbradioplus.so' -print -quit)
           test -n "$module"
           sha256sum "$module" > /tmp/usbradioplus-tested-module.sha256
