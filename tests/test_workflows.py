@@ -275,7 +275,7 @@ gh() {
             for package, version in (
                 ("librate-adjusting-pcm-ring2", "2.0.0.alpha3-1"),
                 ("librptadvradio4", "0.1.0.alpha5-1"),
-                ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha2-1"),
+                ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha3-1"),
                 ("librptadv-rnnoise-adapter1", "0.1.0.alpha2-1"),
                 ("librnnoise0", "0.2-1"),
             ):
@@ -294,6 +294,13 @@ gh() {
                         capture_output=True,
                     )
                     self.assertEqual(json.loads(result.stdout)["name"], expected)
+
+    def test_installs_the_adapter_release_required_by_usbradioplus(self):
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        self.assertIn(
+            "download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3",
+            source,
+        )
 
 
 if __name__ == "__main__":
