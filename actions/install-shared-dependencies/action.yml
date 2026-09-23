@@ -71,7 +71,7 @@ runs:
           librptadv-samplerate-adapter1 librptadv-samplerate-adapter-dev
         download_release rptadv-ffmpeg-adapter v0.1.0-alpha.2 \
           librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev
-        download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.2 \
+        download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 \
           librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev
         download_release rptadv-gpio-adapter v0.1.0-alpha.2 \
           librptadv-gpio-adapter1 librptadv-gpio-adapter-dev
