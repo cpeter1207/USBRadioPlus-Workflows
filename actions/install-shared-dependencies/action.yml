@@ -5,6 +5,12 @@ inputs:
   install:
     description: Install the downloaded Debian packages in the current container.
     default: 'true'
+  ring-version:
+    description: Released version of the rate-adjusting PCM ring.
+    default: v2.0.0-alpha.4
+  samplerate-adapter-version:
+    description: Released version of the sample-rate adapter.
+    default: v0.1.0-alpha.3
   package-directory:
     description: Directory retaining the release packages for publishing or a Docker build context.
     default: dependencies/packages
@@ -34,6 +40,8 @@ runs:
         GH_TOKEN: ${{ github.token }}
         REQUESTED_PACKAGE_DIRECTORY: ${{ inputs.package-directory }}
         INSTALL_PACKAGES: ${{ inputs.install }}
+        RING_VERSION: ${{ inputs.ring-version }}
+        SAMPLERATE_ADAPTER_VERSION: ${{ inputs.samplerate-adapter-version }}
       run: |
         set -euo pipefail
         architecture=$(dpkg --print-architecture)
@@ -64,10 +72,10 @@ runs:
           done
         }
         # Keep the channel and its independently released providers ABI-matched.
-        download_release rate_adjusting_pcm_ring v2.0.0-alpha.3 \
+        download_release rate_adjusting_pcm_ring "$RING_VERSION" \
           librate-adjusting-pcm-ring2 librate-adjusting-pcm-ring2-dev
         download_release librptadvradio v0.1.0-alpha.5 librptadvradio4 librptadvradio-dev
-        download_release rptadv-samplerate-adapter v0.1.0-alpha.2 \
+        download_release rptadv-samplerate-adapter "$SAMPLERATE_ADAPTER_VERSION" \
           librptadv-samplerate-adapter1 librptadv-samplerate-adapter-dev
         download_release rptadv-ffmpeg-adapter v0.1.0-alpha.2 \
           librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev

@@ -18,6 +18,16 @@ on:
         required: false
         default: false
         type: boolean
+      ring_version:
+        description: Released rate-adjusting PCM ring tag.
+        required: false
+        default: v2.0.0-alpha.4
+        type: string
+      samplerate_adapter_version:
+        description: Released sample-rate adapter tag.
+        required: false
+        default: v0.1.0-alpha.3
+        type: string
     secrets:
       APT_SIGNING_KEY:
         required: true
@@ -103,6 +113,9 @@ jobs:
         if: matrix.debian == '13'
         id: shared
         uses: cpeter1207/USBRadioPlus-Workflows/actions/install-shared-dependencies@main
+        with:
+          ring-version: ${{ inputs.ring_version }}
+          samplerate-adapter-version: ${{ inputs.samplerate_adapter_version }}
       - name: Install manually published Debian 12 dependencies
         if: matrix.debian == '12'
         run: |

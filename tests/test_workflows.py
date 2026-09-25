@@ -266,14 +266,16 @@ gh() {
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.S).group(1)
         self.assertNotIn("librate-adjusting-pcm-ring1", source)
-        self.assertIn("rate_adjusting_pcm_ring v2.0.0-alpha.3", source)
+        self.assertIn("default: v2.0.0-alpha.4", source)
+        self.assertIn("default: v0.1.0-alpha.3", source)
         self.assertIn("librptadvradio4", source)
         self.assertIn("librptadv-portaudio-alsa-adapter2", source)
         self.assertIn("librptadv-rnnoise-adapter1", source)
         self.assertIn("librnnoise0 librnnoise-dev", source)
         for architecture in ("amd64", "arm64"):
             for package, version in (
-                ("librate-adjusting-pcm-ring2", "2.0.0.alpha3-1"),
+                ("librate-adjusting-pcm-ring2", "2.0.0.alpha4-1"),
+                ("librptadv-samplerate-adapter1", "0.1.0.alpha3-1"),
                 ("librptadvradio4", "0.1.0.alpha5-1"),
                 ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha3-1"),
                 ("librptadv-rnnoise-adapter1", "0.1.0.alpha2-1"),
@@ -301,6 +303,70 @@ gh() {
             "download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3",
             source,
         )
+
+    def test_package_workflow_passes_release_event_versions_to_dependency_downloads(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        self.assertIn("ring_version:", source)
+        self.assertIn("samplerate_adapter_version:", source)
+        self.assertIn("ring-version: ${{ inputs.ring_version }}", source)
+        self.assertIn(
+            "samplerate-adapter-version: ${{ inputs.samplerate_adapter_version }}",
+            source,
+        )
+
+    def test_shared_package_dispatch_is_limited_and_includes_release_metadata(self):
+        source = (ROOT / "actions/dispatch-package-index/action.yml").read_text()
+        script = textwrap.dedent(re.search(
+            r"(?m)^      run: \|\n((?:        .*\n|\n)+)", source
+        ).group(1))
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            commands = directory / "bin"
+            commands.mkdir()
+            fake_gh = commands / "gh"
+            fake_gh.write_text(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$GH_LOG\"\n"
+                "cat > \"$GH_BODY\"\n"
+            )
+            fake_gh.chmod(0o755)
+            args_log = directory / "args.log"
+            body_log = directory / "body.json"
+            environment = dict(
+                os.environ,
+                PATH=str(commands) + os.pathsep + os.environ["PATH"],
+                GH_TOKEN="test-token",
+                GH_LOG=str(args_log),
+                GH_BODY=str(body_log),
+                PACKAGE_REPOSITORY="cpeter1207/rate_adjusting_pcm_ring",
+                PACKAGE_TAG="v2.0.0-alpha.4",
+                SAMPLERATE_ADAPTER_TAG="v0.1.0-alpha.3",
+            )
+            result = subprocess.run(
+                ["bash", "-c", script], env=environment, text=True, capture_output=True
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = args_log.read_text()
+            payload = json.loads(body_log.read_text())
+            self.assertIn("repos/cpeter1207/USBRadioPlus/dispatches", arguments)
+            self.assertEqual(payload["event_type"], "shared-package-release")
+            self.assertEqual(
+                payload["client_payload"]["repository"],
+                "cpeter1207/rate_adjusting_pcm_ring",
+            )
+            self.assertEqual(payload["client_payload"]["tag"], "v2.0.0-alpha.4")
+            self.assertEqual(
+                payload["client_payload"]["samplerate_adapter_tag"],
+                "v0.1.0-alpha.3",
+            )
+
+            args_log.unlink()
+            body_log.unlink()
+            environment["PACKAGE_REPOSITORY"] = "untrusted/repository"
+            result = subprocess.run(
+                ["bash", "-c", script], env=environment, text=True, capture_output=True
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse(args_log.exists())
 
 
 if __name__ == "__main__":

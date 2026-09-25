@@ -31,10 +31,19 @@ Both release workflows verify the merged source's completed pull-request gates
 before building artifacts, and never repeat the production coverage gate.
 
 Shared adapters are installed from versioned releases after checking GitHub's
-SHA-256 asset digests. The module uses ring ABI 2 from v2.0.0-alpha.3.
+SHA-256 asset digests. The module uses ring ABI 2 from v2.0.0-alpha.4 and the
+sample-rate adapter from v0.1.0-alpha.3.
 Container builds receive these same released packages as the `shared_packages`
 build context. Each library's independent repository owns its implementation,
 tests, packaging, and release gate.
+
+After a ring or sample-rate-adapter release succeeds, its thin source caller
+passes `APT_INDEX_DISPATCH_TOKEN` to the reusable release workflow. The token
+must be a fine-grained PAT with only `Contents: write` on
+`cpeter1207/USBRadioPlus`; store it as that secret in both source repositories.
+The workflow dispatches the released tag to USBRadioPlus, whose existing
+package publisher builds against those exact releases and publishes the signed
+Debian 13 index.
 
 Automatic quality and release work runs on native Debian 13 only: amd64
 collects coverage, while amd64 and arm64 both run tests, builds, and staged
