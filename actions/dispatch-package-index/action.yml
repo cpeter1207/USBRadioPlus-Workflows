@@ -1,0 +1,45 @@
+name: Notify USBRadioPlus package index
+description: Trigger the signed APT package refresh after a shared-package release.
+
+inputs:
+  package-repository:
+    description: Allowlisted shared-library source repository.
+    required: true
+  package-tag:
+    description: Successfully published shared-library release tag.
+    required: true
+  samplerate-adapter-tag:
+    description: Sample-rate adapter tag paired with a ring release, when applicable.
+    required: false
+    default: ''
+  token:
+    description: Fine-grained token with contents:write on cpeter1207/USBRadioPlus.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Dispatch the package-index refresh
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
+        PACKAGE_TAG: ${{ inputs.package-tag }}
+        SAMPLERATE_ADAPTER_TAG: ${{ inputs.samplerate-adapter-tag }}
+      run: |
+        set -euo pipefail
+        case "$PACKAGE_REPOSITORY" in
+          cpeter1207/rate_adjusting_pcm_ring|cpeter1207/rptadv-samplerate-adapter) ;;
+          *) echo "Unapproved package source: $PACKAGE_REPOSITORY" >&2; exit 2 ;;
+        esac
+        [[ "$PACKAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]
+        if [[ -n "$SAMPLERATE_ADAPTER_TAG" ]]; then
+          [[ "$SAMPLERATE_ADAPTER_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]
+        fi
+        test -n "$GH_TOKEN"
+        payload=$(printf \
+          '{"event_type":"shared-package-release","client_payload":{"repository":"%s","tag":"%s","samplerate_adapter_tag":"%s"}}' \
+          "$PACKAGE_REPOSITORY" "$PACKAGE_TAG" "$SAMPLERATE_ADAPTER_TAG")
+        printf '%s\n' "$payload" |
+        gh api --method POST repos/cpeter1207/USBRadioPlus/dispatches \
+          --input -
