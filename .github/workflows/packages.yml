@@ -86,7 +86,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y wget devscripts \
-            debhelper dh-autoreconf build-essential pkg-config python3-pytest \
+            debhelper dh-autoreconf build-essential cargo rustc pkg-config python3-pytest \
             lintian ladspa-sdk libsamplerate0-dev libavfilter-dev libavutil-dev \
             libasound2-dev libusb-1.0-0-dev
           wget -qO /tmp/asl-repo.deb \
@@ -145,7 +145,7 @@ jobs:
           test "$(dpkg-deb -f ../usbradioplus_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
           test "$(dpkg-deb -f ../usbradioplus_*.deb Package)" = usbradioplus
-          for library in librate-adjusting-pcm-ring1 librptadvradio1 \
+          for library in librate-adjusting-pcm-ring1 librptadvradio2 \
             librptadv-samplerate-adapter1 librptadv-ffmpeg-adapter1 \
             librptadv-portaudio-alsa-adapter1 librptadv-gpio-adapter1; do
             dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"

@@ -69,7 +69,7 @@ runs:
           librate-adjusting-pcm-ring1 librate-adjusting-pcm-ring-dev
         download_release rate_adjusting_pcm_ring v2.0.0-alpha.1 \
           librate-adjusting-pcm-ring2 librate-adjusting-pcm-ring2-dev
-        download_release librptadvradio v0.1.0-alpha.1 librptadvradio1 librptadvradio-dev
+        download_release librptadvradio v0.1.0-alpha.2 librptadvradio2 librptadvradio-dev
         download_release rptadv-samplerate-adapter v0.1.0-alpha.1 \
           librptadv-samplerate-adapter1 librptadv-samplerate-adapter-dev
         download_release rptadv-ffmpeg-adapter v0.1.0-alpha.1 \
@@ -85,5 +85,6 @@ runs:
           pkg-config --exists rate_adjusting_pcm_ring rptadvradio \
             rptadv_samplerate_adapter rptadv_ffmpeg_adapter \
             rptadv_portaudio_alsa_adapter rptadv_gpio_adapter
+          test "$(pkg-config --variable=abi_version rptadvradio)" = 2
         fi
         printf 'package_directory=%s\n' "$package_directory" >> "$GITHUB_OUTPUT"

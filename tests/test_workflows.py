@@ -29,6 +29,15 @@ class WorkflowContracts(unittest.TestCase):
         self.assertEqual(len(builds[1]), 4)
         self.assertNotIn("requested_api", source)
         self.assertNotIn("ASL_RADIO_API", source)
+        self.assertIn("build-essential cargo rustc pkg-config", source)
+        self.assertIn("librate-adjusting-pcm-ring1 librptadvradio2", source)
+
+    def test_radio_core_dependency_requires_the_current_descriptor_abi(self):
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        self.assertIn("download_release librptadvradio v0.1.0-alpha.2 "
+                      "librptadvradio2 librptadvradio-dev", source)
+        self.assertIn('test "$(pkg-config --variable=abi_version rptadvradio)" = 2', source)
+        self.assertNotIn("librptadvradio1", source)
 
     def test_published_package_is_verified_under_both_runtimes(self):
         source = (ROOT / ".github/workflows/packages.yml").read_text()
