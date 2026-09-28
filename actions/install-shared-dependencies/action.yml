@@ -33,6 +33,11 @@ runs:
           "${privilege[@]}" apt-get update
           "${privilege[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gh jq pkg-config
         fi
+    - name: Build explicitly pinned candidate dependencies
+      uses: cpeter1207/rptadv-shared-library-workflows/actions/install-candidate-dependencies@main
+      with:
+        package-directory: ${{ inputs.package-directory }}
+        install: 'false'
     - name: Download released shared libraries
       id: dependencies
       shell: bash
@@ -52,6 +57,11 @@ runs:
           repository=$1
           tag=$2
           shift 2
+          # An immutable source pin supplies an unreleased ABI; do not overwrite it
+          # with an older released package having the same Debian version.
+          if [[ -f .github/dependencies.json ]] &&
+            jq -e --arg repository "$repository" 'any(.[]; .repository == $repository)' \
+              .github/dependencies.json >/dev/null; then return; fi
           metadata=$(gh api "repos/cpeter1207/$repository/releases/tags/$tag")
           test "$(jq -r .draft <<< "$metadata")" = false
           for package in "$@"; do
@@ -87,9 +97,13 @@ runs:
           librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev
         if [[ "$INSTALL_PACKAGES" == true ]]; then
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y "$package_directory"/*.deb
+          DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y "$package_directory"/*.deb
           ldconfig
-          pkg-config --exists rate_adjusting_pcm_ring2 rptadvradio \
+          ring_pc=rate_adjusting_pcm_ring2
+          if [[ -f .github/dependencies.json ]] &&
+            jq -e 'any(.[]; .packages | index("librate-adjusting-pcm-ring3-dev"))' \
+              .github/dependencies.json >/dev/null; then ring_pc=rate_adjusting_pcm_ring3; fi
+          pkg-config --exists "$ring_pc" rptadvradio \
             rptadv_samplerate_adapter rptadv_ffmpeg_adapter \
             rptadv_portaudio_alsa_adapter rptadv_gpio_adapter rptadv_rnnoise_adapter
           test "$(pkg-config --variable=abi_version rptadvradio)" = 4

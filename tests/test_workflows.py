@@ -304,6 +304,27 @@ gh() {
             source,
         )
 
+    def test_candidate_pin_is_not_replaced_with_an_older_release(self):
+        """A ring3 candidate must survive the installer's ring2 release default."""
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        function = textwrap.dedent(re.search(
+            r"(?m)^        download_release\(\) \{\n.*?^        \}\n", source, re.S
+        ).group(0))
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            (directory / ".github").mkdir()
+            (directory / ".github/dependencies.json").write_text(json.dumps([{
+                "repository": "rate_adjusting_pcm_ring",
+                "sha": "1" * 40,
+                "packages": ["librate-adjusting-pcm-ring3"],
+            }]))
+            result = subprocess.run(
+                ["bash", "-c", "set -euo pipefail\ngh() { return 79; }\n" + function
+                 + "\ndownload_release rate_adjusting_pcm_ring old-tag librate-adjusting-pcm-ring2"],
+                cwd=directory, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_package_workflow_passes_release_event_versions_to_dependency_downloads(self):
         source = (ROOT / ".github/workflows/packages.yml").read_text()
         self.assertIn("ring_version:", source)
