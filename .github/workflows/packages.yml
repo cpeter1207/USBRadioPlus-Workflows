@@ -21,12 +21,12 @@ on:
       ring_version:
         description: Released rate-adjusting PCM ring tag.
         required: false
-        default: v2.0.0-alpha.4
+        default: v3.0.0-alpha.2
         type: string
       samplerate_adapter_version:
         description: Released sample-rate adapter tag.
         required: false
-        default: v0.1.0-alpha.3
+        default: v0.2.0-alpha.1
         type: string
     secrets:
       APT_SIGNING_KEY:
@@ -163,8 +163,14 @@ jobs:
           test "$(dpkg-deb -f ../usbradioplus_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
           test "$(dpkg-deb -f ../usbradioplus_*.deb Package)" = usbradioplus
-          for library in librate-adjusting-pcm-ring2 librptadvradio4 \
-            librptadv-samplerate-adapter1 librptadv-ffmpeg-adapter1 \
+          ring_package=librate-adjusting-pcm-ring3
+          samplerate_package=librptadv-samplerate-adapter2
+          if test '${{ matrix.debian }}' = 12; then
+            ring_package=librate-adjusting-pcm-ring2
+            samplerate_package=librptadv-samplerate-adapter1
+          fi
+          for library in "$ring_package" librptadvradio4 \
+            "$samplerate_package" librptadv-ffmpeg-adapter1 \
             librptadv-portaudio-alsa-adapter2 librptadv-gpio-adapter1 \
             librptadv-rnnoise-adapter1; do
             dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"
@@ -351,17 +357,21 @@ jobs:
           test -f "$module_dir/chan_usbradioplus.so"
           test -x /usr/sbin/usbradioplus-tune
           test -f /usr/share/man/man7/usbradioplus.7.gz
-          test "$(dpkg-query -W -f='${db:Status-Status}' \
-            librate-adjusting-pcm-ring2)" = installed
-          ring_library=$(dpkg-query -L librate-adjusting-pcm-ring2 | \
-            sed -n '/\/librate_adjusting_pcm_ring2\.so\.2$/ { p; q; }')
+          ring_package=librate-adjusting-pcm-ring3
+          ring_soname=librate_adjusting_pcm_ring3.so.3
+          if test '${{ matrix.debian }}' = 12; then
+            ring_package=librate-adjusting-pcm-ring2
+            ring_soname=librate_adjusting_pcm_ring2.so.2
+          fi
+          test "$(dpkg-query -W -f='${db:Status-Status}' "$ring_package")" = installed
+          ring_library=$(dpkg-query -L "$ring_package" | grep -F "/$ring_soname" | sed -n '1p')
           test -n "$ring_library"
           test -f "$ring_library"
           ldd "$module_dir/chan_usbradioplus.so" | \
-            grep -F 'librate_adjusting_pcm_ring2.so.2' | grep -Fv 'not found'
+            grep -F "$ring_soname" | grep -Fv 'not found'
           cmp -s /tmp/config-before/modules.conf /etc/asterisk/modules.conf 2>/dev/null || \
             test ! -e /tmp/config-before/modules.conf
           cmp -s /tmp/config-before/rpt.conf /etc/asterisk/rpt.conf 2>/dev/null || \
             test ! -e /tmp/config-before/rpt.conf
           dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
-            "$package" librnnoise0 librate-adjusting-pcm-ring2
+            "$package" librnnoise0 "$ring_package"
