@@ -136,7 +136,7 @@ jobs:
         with:
           debian: ${{ matrix.debian }}
           suite: ${{ matrix.suite }}
-      - name: Build USBRadioPlus package
+      - name: Build USBRadioPlus integration and product packages
         id: usbradioplus_build
         run: |
           set -eux
@@ -149,13 +149,15 @@ jobs:
           dpkg-buildpackage -b -us -uc
           lintian --fail-on error ../usbradioplus_*.changes
           mkdir -p package-output
-          cp ../usbradioplus_*.deb package-output/
+          cp ../usbradioplus_*.deb ../libusbradioplus-product1_*.deb \
+            ../libusbradioplus-product-dev_*.deb package-output/
           cp "${{ steps.rnnoise.outputs.package-directory }}"/librnnoise0_*.deb \
             "${{ steps.rnnoise.outputs.package-directory }}"/librnnoise-dev_*.deb package-output/
           if test '${{ matrix.debian }}' = 13; then
             cp "${{ steps.shared.outputs.package-directory }}"/*.deb package-output/
           fi
-          find .. -maxdepth 1 -name 'usbradioplus-dbgsym_*.deb' \
+          find .. -maxdepth 1 \( -name 'usbradioplus-dbgsym_*.deb' \
+            -o -name 'libusbradioplus-product1-dbgsym_*.deb' \) \
             -exec cp -t package-output {} +
           printf 'suite=%s\narchitecture=%s\nasl3_build=%s\n' \
             '${{ matrix.suite }}' "$(dpkg --print-architecture)" \
@@ -163,6 +165,16 @@ jobs:
           test "$(dpkg-deb -f ../usbradioplus_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
           test "$(dpkg-deb -f ../usbradioplus_*.deb Package)" = usbradioplus
+          test "$(dpkg-deb -f ../libusbradioplus-product1_*.deb Package)" = libusbradioplus-product1
+          test "$(dpkg-deb -f ../libusbradioplus-product-dev_*.deb Package)" = libusbradioplus-product-dev
+          product_version=$(dpkg-deb -f ../libusbradioplus-product1_*.deb Version)
+          for package in ../usbradioplus_*.deb ../libusbradioplus-product-dev_*.deb; do
+            dpkg-deb -f "$package" Depends | grep -F "libusbradioplus-product1 (= $product_version)"
+          done
+          if dpkg-deb -f ../libusbradioplus-product1_*.deb Depends | grep -E 'asterisk|rpt-advanced'; then
+            echo 'The radio product must remain independent of Asterisk and the controller' >&2
+            exit 1
+          fi
           ring_package=librate-adjusting-pcm-ring3
           samplerate_package=librptadv-samplerate-adapter2
           if test '${{ matrix.debian }}' = 12; then
@@ -173,7 +185,7 @@ jobs:
             "$samplerate_package" librptadv-ffmpeg-adapter1 \
             librptadv-portaudio-alsa-adapter2 librptadv-gpio-adapter1 \
             librptadv-rnnoise-adapter1; do
-            dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"
+            dpkg-deb -f ../libusbradioplus-product1_*.deb Depends | grep -F "$library"
           done
       - uses: actions/upload-artifact@v7
         with:

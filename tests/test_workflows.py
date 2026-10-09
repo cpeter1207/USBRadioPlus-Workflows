@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkflowContracts(unittest.TestCase):
-    """Protect native platform coverage and the single-package release path."""
+    """Protect native platform coverage and the split-package release path."""
 
     def test_quality_image_bootstrap_has_no_release_dependency_cycle(self):
         source = (ROOT / ".github/workflows/containers.yml").read_text()
@@ -67,7 +67,27 @@ class WorkflowContracts(unittest.TestCase):
             "DEBIAN_FRONTEND=noninteractive apt-get install -y ../usbradioplus_*.deb",
             source,
         )
+        self.assertIn("../libusbradioplus-product1_*.deb", source)
+        self.assertIn("../libusbradioplus-product-dev_*.deb", source)
         self.assertNotIn("dpkg -i ../usbradioplus_*.deb", source)
+
+    def test_release_stages_and_checks_split_product_packages(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        build = source.split("      - name: Build USBRadioPlus", 1)[1].split(
+            "      - uses: actions/upload-artifact", 1
+        )[0]
+        self.assertIn("../libusbradioplus-product1_*.deb", build)
+        self.assertIn("../libusbradioplus-product-dev_*.deb", build)
+        self.assertIn("libusbradioplus-product1-dbgsym_*.deb", build)
+        self.assertIn(
+            'dpkg-deb -f ../libusbradioplus-product1_*.deb Depends | grep -F "$library"',
+            build,
+        )
+        self.assertNotIn(
+            'dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"',
+            build,
+        )
+        self.assertIn('libusbradioplus-product1 (= $product_version)', build)
 
     def test_composite_action_shell_programs(self):
         for path in sorted((ROOT / "actions").glob("*/action.yml")):
@@ -241,6 +261,9 @@ gh() {
             r'(?ms)^            case "\$package" in\n.*?^            esac$', source
         ).group(0)
         retained = [
+            "/incoming/libusbradioplus-product1_0.1.0~alpha18-1.deb13_amd64.deb",
+            "/incoming/libusbradioplus-product-dev_0.1.0~alpha18-1.deb13_arm64.deb",
+            "/incoming/libusbradioplus-product1-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/usbradioplus_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/usbradioplus-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/librate-adjusting-pcm-ring1_1.0.1-1.deb13_amd64.deb",

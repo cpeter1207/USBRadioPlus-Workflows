@@ -22,8 +22,15 @@ change reaches `main`. Release metadata and the following development-version bu
 ordinary, separately validated pull requests; release automation does not make
 or merge bookkeeping commits.
 
-USBRadioPlus has one Debian binary package, `usbradioplus`, built against
-ASL3 3.9.3. On each native Debian 13 architecture the pull-request gate loads
+USBRadioPlus builds three Debian binary packages: `usbradioplus` contains the
+Asterisk integration and tuner, `libusbradioplus-product1` contains the shared
+radio product and AGC plugin, and `libusbradioplus-product-dev` contains its
+public header, linker symlink, and pkg-config metadata. The integration and
+development packages depend on the exact matching product runtime; the product
+runtime depends on the lower shared providers, not Asterisk or the controller.
+All three outputs are staged for the existing signed APT publisher.
+
+The integration is built against ASL3 3.9.3. On each native Debian 13 architecture the pull-request gate loads
 the identical package under ASL3 3.9.3 and 3.10.5 and verifies the module hash
 does not change. Those exact runtime alternatives are recorded in the package;
 there is no legacy/modern package selection or resource-module header staging.
