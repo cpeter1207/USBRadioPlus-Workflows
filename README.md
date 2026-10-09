@@ -22,8 +22,15 @@ change reaches `main`. Release metadata and the following development-version bu
 ordinary, separately validated pull requests; release automation does not make
 or merge bookkeeping commits.
 
-USBRadioPlus has one Debian binary package, `usbradioplus`, built against
-ASL3 3.9.3. On each native Debian 13 architecture the pull-request gate loads
+USBRadioPlus builds three Debian binary packages: `usbradioplus` contains the
+Asterisk integration and tuner, `libusbradioplus-product1` contains the shared
+radio product and AGC plugin, and `libusbradioplus-product-dev` contains its
+public header, linker symlink, and pkg-config metadata. The integration and
+development packages depend on the exact matching product runtime; the product
+runtime depends on the lower shared providers, not Asterisk or the controller.
+All three outputs are staged for the existing signed APT publisher.
+
+The integration is built against ASL3 3.9.3. On each native Debian 13 architecture the pull-request gate loads
 the identical package under ASL3 3.9.3 and 3.10.5 and verifies the module hash
 does not change. Those exact runtime alternatives are recorded in the package;
 there is no legacy/modern package selection or resource-module header staging.
@@ -31,8 +38,8 @@ Both release workflows verify the merged source's completed pull-request gates
 before building artifacts, and never repeat the production coverage gate.
 
 Shared adapters are installed from versioned releases after checking GitHub's
-SHA-256 asset digests. The module uses ring ABI 2 from v2.0.0-alpha.4 and the
-sample-rate adapter from v0.1.0-alpha.3.
+SHA-256 asset digests. The module uses ring ABI 3 from v3.0.0-alpha.2 and
+sample-rate adapter ABI 2 from v0.2.0-alpha.1.
 Container builds receive these same released packages as the `shared_packages`
 build context. Each library's independent repository owns its implementation,
 tests, packaging, and release gate.

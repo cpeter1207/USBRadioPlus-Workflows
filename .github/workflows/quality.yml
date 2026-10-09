@@ -80,11 +80,12 @@ jobs:
           if-no-files-found: error
       - name: Install RNNoise companion packages
         uses: cpeter1207/USBRadioPlus-Workflows/actions/install-rnnoise-packages@main
-      - name: Build and install the single Debian package
+      - name: Build and install the integration and product Debian packages
         run: |
           DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -b -us -uc
           lintian --fail-on error ../usbradioplus_*.changes
-          DEBIAN_FRONTEND=noninteractive apt-get install -y ../usbradioplus_*.deb
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ../usbradioplus_*.deb \
+            ../libusbradioplus-product1_*.deb ../libusbradioplus-product-dev_*.deb
           module=$(find /usr/lib -path '*/asterisk/modules/chan_usbradioplus.so' -print -quit)
           test -n "$module"
           sha256sum "$module" > /tmp/usbradioplus-tested-module.sha256

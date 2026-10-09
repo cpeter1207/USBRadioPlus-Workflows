@@ -7,10 +7,10 @@ inputs:
     default: 'true'
   ring-version:
     description: Released version of the rate-adjusting PCM ring.
-    default: v2.0.0-alpha.4
+    default: v3.0.0-alpha.2
   samplerate-adapter-version:
     description: Released version of the sample-rate adapter.
-    default: v0.1.0-alpha.3
+    default: v0.2.0-alpha.1
   package-directory:
     description: Directory retaining the release packages for publishing or a Docker build context.
     default: dependencies/packages
@@ -83,10 +83,10 @@ runs:
         }
         # Keep the channel and its independently released providers ABI-matched.
         download_release rate_adjusting_pcm_ring "$RING_VERSION" \
-          librate-adjusting-pcm-ring2 librate-adjusting-pcm-ring2-dev
+          librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev
         download_release librptadvradio v0.1.0-alpha.5 librptadvradio4 librptadvradio-dev
         download_release rptadv-samplerate-adapter "$SAMPLERATE_ADAPTER_VERSION" \
-          librptadv-samplerate-adapter1 librptadv-samplerate-adapter-dev
+          librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev
         download_release rptadv-ffmpeg-adapter v0.1.0-alpha.2 \
           librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev
         download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 \
@@ -99,13 +99,11 @@ runs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y "$package_directory"/*.deb
           ldconfig
-          ring_pc=rate_adjusting_pcm_ring2
-          if [[ -f .github/dependencies.json ]] &&
-            jq -e 'any(.[]; .packages | index("librate-adjusting-pcm-ring3-dev"))' \
-              .github/dependencies.json >/dev/null; then ring_pc=rate_adjusting_pcm_ring3; fi
-          pkg-config --exists "$ring_pc" rptadvradio \
+          pkg-config --exists rate_adjusting_pcm_ring3 rptadvradio \
             rptadv_samplerate_adapter rptadv_ffmpeg_adapter \
             rptadv_portaudio_alsa_adapter rptadv_gpio_adapter rptadv_rnnoise_adapter
           test "$(pkg-config --variable=abi_version rptadvradio)" = 4
+          test -f "$(pkg-config --variable=libdir rate_adjusting_pcm_ring3)/librate_adjusting_pcm_ring3.so.3"
+          test "$(pkg-config --variable=abi_version rptadv_samplerate_adapter)" = 2
         fi
         printf 'package_directory=%s\n' "$package_directory" >> "$GITHUB_OUTPUT"

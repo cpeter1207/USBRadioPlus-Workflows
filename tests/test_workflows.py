@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkflowContracts(unittest.TestCase):
-    """Protect native platform coverage and the single-package release path."""
+    """Protect native platform coverage and the split-package release path."""
 
     def test_quality_image_bootstrap_has_no_release_dependency_cycle(self):
         source = (ROOT / ".github/workflows/containers.yml").read_text()
@@ -67,7 +67,27 @@ class WorkflowContracts(unittest.TestCase):
             "DEBIAN_FRONTEND=noninteractive apt-get install -y ../usbradioplus_*.deb",
             source,
         )
+        self.assertIn("../libusbradioplus-product1_*.deb", source)
+        self.assertIn("../libusbradioplus-product-dev_*.deb", source)
         self.assertNotIn("dpkg -i ../usbradioplus_*.deb", source)
+
+    def test_release_stages_and_checks_split_product_packages(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        build = source.split("      - name: Build USBRadioPlus", 1)[1].split(
+            "      - uses: actions/upload-artifact", 1
+        )[0]
+        self.assertIn("../libusbradioplus-product1_*.deb", build)
+        self.assertIn("../libusbradioplus-product-dev_*.deb", build)
+        self.assertIn("libusbradioplus-product1-dbgsym_*.deb", build)
+        self.assertIn(
+            'dpkg-deb -f ../libusbradioplus-product1_*.deb Depends | grep -F "$library"',
+            build,
+        )
+        self.assertNotIn(
+            'dpkg-deb -f ../usbradioplus_*.deb Depends | grep -F "$library"',
+            build,
+        )
+        self.assertIn('libusbradioplus-product1 (= $product_version)', build)
 
     def test_composite_action_shell_programs(self):
         for path in sorted((ROOT / "actions").glob("*/action.yml")):
@@ -241,10 +261,13 @@ gh() {
             r'(?ms)^            case "\$package" in\n.*?^            esac$', source
         ).group(0)
         retained = [
+            "/incoming/libusbradioplus-product1_0.1.0~alpha18-1.deb13_amd64.deb",
+            "/incoming/libusbradioplus-product-dev_0.1.0~alpha18-1.deb13_arm64.deb",
+            "/incoming/libusbradioplus-product1-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/usbradioplus_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/usbradioplus-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/librate-adjusting-pcm-ring1_1.0.1-1.deb13_amd64.deb",
-            "/incoming/librate-adjusting-pcm-ring2_2.0.0.alpha1-1_amd64.deb",
+            "/incoming/librate-adjusting-pcm-ring3_3.0.0.alpha2-1_amd64.deb",
             "/incoming/librptadv-portaudio-alsa-adapter1_0.1.0.alpha2-1_amd64.deb",
             "/incoming/librnnoise0_0.2-1_amd64.deb",
             "/incoming/librnnoise-dev_0.2-1_arm64.deb",
@@ -266,16 +289,18 @@ gh() {
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.S).group(1)
         self.assertNotIn("librate-adjusting-pcm-ring1", source)
-        self.assertIn("default: v2.0.0-alpha.4", source)
-        self.assertIn("default: v0.1.0-alpha.3", source)
+        self.assertIn("default: v3.0.0-alpha.2", source)
+        self.assertIn("default: v0.2.0-alpha.1", source)
         self.assertIn("librptadvradio4", source)
         self.assertIn("librptadv-portaudio-alsa-adapter2", source)
         self.assertIn("librptadv-rnnoise-adapter1", source)
         self.assertIn("librnnoise0 librnnoise-dev", source)
+        self.assertIn('pkg-config --variable=abi_version rptadv_samplerate_adapter)" = 2', source)
+        self.assertIn("librate_adjusting_pcm_ring3.so.3", source)
         for architecture in ("amd64", "arm64"):
             for package, version in (
-                ("librate-adjusting-pcm-ring2", "2.0.0.alpha4-1"),
-                ("librptadv-samplerate-adapter1", "0.1.0.alpha3-1"),
+                ("librate-adjusting-pcm-ring3", "3.0.0.alpha2-1"),
+                ("librptadv-samplerate-adapter2", "0.2.0.alpha1-1"),
                 ("librptadvradio4", "0.1.0.alpha5-1"),
                 ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha3-1"),
                 ("librptadv-rnnoise-adapter1", "0.1.0.alpha2-1"),
@@ -305,7 +330,7 @@ gh() {
         )
 
     def test_candidate_pin_is_not_replaced_with_an_older_release(self):
-        """A ring3 candidate must survive the installer's ring2 release default."""
+        """A ring3 candidate must survive the installer's released fallback."""
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         function = textwrap.dedent(re.search(
             r"(?m)^        download_release\(\) \{\n.*?^        \}\n", source, re.S
@@ -320,7 +345,7 @@ gh() {
             }]))
             result = subprocess.run(
                 ["bash", "-c", "set -euo pipefail\ngh() { return 79; }\n" + function
-                 + "\ndownload_release rate_adjusting_pcm_ring old-tag librate-adjusting-pcm-ring2"],
+                 + "\ndownload_release rate_adjusting_pcm_ring old-tag librate-adjusting-pcm-ring3"],
                 cwd=directory, text=True, capture_output=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -360,7 +385,7 @@ gh() {
                 GH_BODY=str(body_log),
                 PACKAGE_REPOSITORY="cpeter1207/rate_adjusting_pcm_ring",
                 PACKAGE_TAG="v2.0.0-alpha.4",
-                SAMPLERATE_ADAPTER_TAG="v0.1.0-alpha.3",
+                SAMPLERATE_ADAPTER_TAG="v0.2.0-alpha.1",
             )
             result = subprocess.run(
                 ["bash", "-c", script], env=environment, text=True, capture_output=True
@@ -377,7 +402,7 @@ gh() {
             self.assertEqual(payload["client_payload"]["tag"], "v2.0.0-alpha.4")
             self.assertEqual(
                 payload["client_payload"]["samplerate_adapter_tag"],
-                "v0.1.0-alpha.3",
+                "v0.2.0-alpha.1",
             )
 
             args_log.unlink()
