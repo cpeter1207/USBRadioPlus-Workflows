@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check release matrix boundaries and shell programs embedded in actions."""
 
+import hashlib
 import json
 import os
 import re
@@ -475,6 +476,70 @@ gh() {
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertFalse(log.exists())
+
+    def test_index_only_downloads_only_requested_release(self):
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        download = source.split("    - name: Download released shared libraries\n", 1)[1]
+        script = textwrap.dedent(download.split("      run: |\n", 1)[1])
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            architecture = subprocess.run(
+                ["dpkg", "--print-architecture"], text=True, capture_output=True,
+                check=True,
+            ).stdout.strip()
+            assets = []
+            names = ("librptadvsquelch1", "librptadvsquelch-dev")
+            for package in names:
+                source_dir = directory / package
+                control = source_dir / "DEBIAN/control"
+                control.parent.mkdir(parents=True)
+                control.write_text(
+                    f"Package: {package}\nVersion: 0.1.0.alpha1-1\n"
+                    f"Architecture: {architecture}\nMaintainer: Test <test@example.org>\n"
+                    "Description: Test package\n"
+                )
+                filename = f"{package}_0.1.0.alpha1-1_{architecture}.deb"
+                package_file = directory / filename
+                subprocess.run(["dpkg-deb", "--build", str(source_dir), str(package_file)],
+                               check=True, capture_output=True)
+                assets.append({
+                    "name": filename,
+                    "digest": "sha256:" + hashlib.sha256(package_file.read_bytes()).hexdigest(),
+                    "browser_download_url": package_file.as_uri(),
+                })
+            metadata = directory / "release.json"
+            metadata.write_text(json.dumps({"draft": False, "assets": assets}))
+            commands = directory / "bin"
+            commands.mkdir()
+            gh = commands / "gh"
+            gh.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$*\" >> \"$GH_LOG\"\n"
+                "test \"$*\" = 'api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.1' || exit 72\n"
+                "cat \"$RELEASE_METADATA\"\n"
+            )
+            gh.chmod(0o755)
+            calls = directory / "gh.log"
+            output = directory / "github-output"
+            result = subprocess.run(
+                ["bash", "-c", script], cwd=directory,
+                env=dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
+                         GH_LOG=str(calls), RELEASE_METADATA=str(metadata),
+                         GITHUB_OUTPUT=str(output), REQUESTED_PACKAGE_DIRECTORY="dependencies/packages",
+                         INSTALL_PACKAGES="false", RING_VERSION="v3.0.0-alpha.2",
+                         SAMPLERATE_ADAPTER_VERSION="v0.2.0-alpha.1",
+                         RELEASED_REPOSITORY="cpeter1207/librptadvsquelch",
+                         RELEASED_TAG="v0.1.0-alpha.1"),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(calls.read_text().splitlines(), [
+                "api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.1"
+            ])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual({path.name for path in (directory / "dependencies/packages").iterdir()},
+                             {asset["name"] for asset in assets})
+            self.assertIn("package_directory=", output.read_text())
+            self.assertIn("if: inputs.released-repository == '' || inputs.install != 'false'", source)
 
     def test_shared_package_dispatch_is_limited_and_includes_release_metadata(self):
         source = (ROOT / "actions/dispatch-package-index/action.yml").read_text()
