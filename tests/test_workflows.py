@@ -435,7 +435,7 @@ gh() {
         self.assertIn("released-tag: ${{ inputs.released_tag }}", source)
         self.assertNotIn("released-ref:", source)
 
-    def test_new_library_release_downloads_expected_packages(self):
+    def test_library_and_owner_releases_download_expected_packages(self):
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         route = textwrap.dedent(source.split(
             '        if [[ -n "$RELEASED_REPOSITORY$RELEASED_TAG" ]]; then\n', 1
@@ -446,11 +446,17 @@ gh() {
                   + route)
         with tempfile.TemporaryDirectory() as work:
             log = Path(work) / "download.log"
-            for component in (
-                "squelch", "ctcss", "dcs", "signaling", "tone", "morse",
-                "dtmf", "template", "schedule",
-            ):
-                repository = f"librptadv{component}"
+            releases = [
+                (f"librptadv{component}", (f"librptadv{component}1", f"librptadv{component}-dev"))
+                for component in (
+                    "squelch", "ctcss", "dcs", "signaling", "tone", "morse",
+                    "dtmf", "template", "schedule",
+                )
+            ] + [
+                ("librptadvradio", ("librptadvradio4", "librptadvradio-dev")),
+                ("rptadv-gpio-adapter", ("librptadv-gpio-adapter1", "librptadv-gpio-adapter-dev")),
+            ]
+            for repository, packages in releases:
                 with self.subTest(repository=repository):
                     result = subprocess.run(
                         ["bash", "-c", script],
@@ -460,8 +466,7 @@ gh() {
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(log.read_text().splitlines(), [
-                        repository, "v0.1.0-alpha.1",
-                        f"{repository}1", f"{repository}-dev",
+                        repository, "v0.1.0-alpha.1", *packages,
                     ])
                     log.unlink()
             for repository, tag in (("cpeter1207/unrelated", "v0.1.0-alpha.1"),
@@ -597,12 +602,14 @@ gh() {
             self.assertEqual(result.returncode, 2)
             self.assertFalse(args_log.exists())
 
-            for component in (
-                "squelch", "ctcss", "dcs", "signaling", "tone", "morse",
-                "dtmf", "template", "schedule",
+            for repository in (
+                "librptadvsquelch", "librptadvctcss", "librptadvdcs",
+                "librptadvsignaling", "librptadvtone", "librptadvmorse",
+                "librptadvdtmf", "librptadvtemplate", "librptadvschedule",
+                "librptadvradio", "rptadv-gpio-adapter",
             ):
-                with self.subTest(component=component):
-                    environment["PACKAGE_REPOSITORY"] = f"cpeter1207/librptadv{component}"
+                with self.subTest(repository=repository):
+                    environment["PACKAGE_REPOSITORY"] = f"cpeter1207/{repository}"
                     result = subprocess.run(
                         ["bash", "-c", script], env=environment,
                         text=True, capture_output=True, check=False,
@@ -610,7 +617,7 @@ gh() {
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(
                         json.loads(body_log.read_text())["client_payload"]["repository"],
-                        f"cpeter1207/librptadv{component}",
+                        f"cpeter1207/{repository}",
                     )
 
 

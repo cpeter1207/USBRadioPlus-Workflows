@@ -30,6 +30,7 @@ runs:
         set -euo pipefail
         case "$PACKAGE_REPOSITORY" in
           cpeter1207/rate_adjusting_pcm_ring|cpeter1207/rptadv-samplerate-adapter|\
+          cpeter1207/librptadvradio|cpeter1207/rptadv-gpio-adapter|\
           cpeter1207/librptadvsquelch|cpeter1207/librptadvctcss|\
           cpeter1207/librptadvdcs|cpeter1207/librptadvsignaling|\
           cpeter1207/librptadvtone|cpeter1207/librptadvmorse|\
