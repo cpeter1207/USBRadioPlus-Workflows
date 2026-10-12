@@ -423,14 +423,14 @@ gh() {
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(log.read_text().splitlines(), [
                 "rate_adjusting_pcm_ring v3.0.0-alpha2 librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev",
-                "librptadvradio v0.1.0-alpha.7 librptadvradio4 librptadvradio-dev",
+                "librptadvradio v0.1.0-alpha.8 librptadvradio4 librptadvradio-dev",
                 "rptadv-samplerate-adapter v0.2.0-alpha1 librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev",
                 "rptadv-ffmpeg-adapter v0.1.0-alpha.2 librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev",
                 "rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
                 "rptadv-gpio-adapter v0.1.0-alpha.3 librptadv-gpio-adapter1 librptadv-gpio-adapter-dev",
                 "rptadv-rnnoise-adapter v0.1.0-alpha.2 librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev",
-                "librptadvsquelch v0.1.0-alpha.1 librptadvsquelch1 librptadvsquelch-dev",
-                "librptadvctcss v0.1.0-alpha.1 librptadvctcss1 librptadvctcss-dev",
+                "librptadvsquelch v0.1.0-alpha.2 librptadvsquelch2 librptadvsquelch-dev",
+                "librptadvctcss v0.1.0-alpha.2 librptadvctcss2 librptadvctcss-dev",
                 "librptadvdcs v0.1.0-alpha.1 librptadvdcs1 librptadvdcs-dev",
                 "librptadvsignaling v0.1.0-alpha.1 librptadvsignaling1 librptadvsignaling-dev",
             ])
@@ -489,21 +489,24 @@ gh() {
         with tempfile.TemporaryDirectory() as work:
             log = Path(work) / "download.log"
             releases = [
-                ("librptadvsquelch", ("librptadvsquelch2", "librptadvsquelch-dev")),
-                ("librptadvctcss", ("librptadvctcss2", "librptadvctcss-dev")),
+                ("librptadvsquelch", "v0.1.0-alpha.2",
+                 ("librptadvsquelch2", "librptadvsquelch-dev")),
+                ("librptadvctcss", "v0.1.0-alpha.2",
+                 ("librptadvctcss2", "librptadvctcss-dev")),
             ] + [
-                (f"librptadv{component}", (f"librptadv{component}1", f"librptadv{component}-dev"))
+                (f"librptadv{component}", "v0.1.0-alpha.1",
+                 (f"librptadv{component}1", f"librptadv{component}-dev"))
                 for component in (
                     "dcs", "signaling", "tone", "morse", "dtmf", "template", "schedule",
                 )
             ] + [
-                ("librptadvradio", ("librptadvradio4", "librptadvradio-dev")),
-                ("rptadv-gpio-adapter", ("librptadv-gpio-adapter1", "librptadv-gpio-adapter-dev")),
+                ("librptadvradio", "v0.1.0-alpha.8",
+                 ("librptadvradio4", "librptadvradio-dev")),
+                ("rptadv-gpio-adapter", "v0.1.0-alpha.3",
+                 ("librptadv-gpio-adapter1", "librptadv-gpio-adapter-dev")),
             ]
-            for repository, packages in releases:
+            for repository, tag, packages in releases:
                 with self.subTest(repository=repository):
-                    tag = ("v0.1.0-alpha.2" if repository in
-                           ("librptadvsquelch", "librptadvctcss") else "v0.1.0-alpha.1")
                     result = subprocess.run(
                         ["bash", "-c", script],
                         env=dict(os.environ, RELEASED_REPOSITORY=f"cpeter1207/{repository}",
