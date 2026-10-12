@@ -124,8 +124,8 @@ runs:
             rate_adjusting_pcm_ring|rptadv-samplerate-adapter) ;;
             librptadvradio) packages=(librptadvradio4 librptadvradio-dev) ;;
             rptadv-gpio-adapter) packages=(librptadv-gpio-adapter1 librptadv-gpio-adapter-dev) ;;
-            librptadvsquelch) packages=(librptadvsquelch1 librptadvsquelch-dev) ;;
-            librptadvctcss) packages=(librptadvctcss1 librptadvctcss-dev) ;;
+            librptadvsquelch) packages=(librptadvsquelch2 librptadvsquelch-dev) ;;
+            librptadvctcss) packages=(librptadvctcss2 librptadvctcss-dev) ;;
             librptadvdcs) packages=(librptadvdcs1 librptadvdcs-dev) ;;
             librptadvsignaling) packages=(librptadvsignaling1 librptadvsignaling-dev) ;;
             librptadvtone) packages=(librptadvtone1 librptadvtone-dev) ;;
