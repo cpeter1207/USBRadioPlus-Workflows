@@ -96,7 +96,7 @@ runs:
           # Keep the channel and its independently released providers ABI-matched.
           download_release rate_adjusting_pcm_ring "$RING_VERSION" \
             librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev
-          download_release librptadvradio v0.1.0-alpha.7 librptadvradio4 librptadvradio-dev
+          download_release librptadvradio v0.1.0-alpha.8 librptadvradio4 librptadvradio-dev
           download_release rptadv-samplerate-adapter "$SAMPLERATE_ADAPTER_VERSION" \
             librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev
           download_release rptadv-ffmpeg-adapter v0.1.0-alpha.2 \
@@ -107,8 +107,8 @@ runs:
             librptadv-gpio-adapter1 librptadv-gpio-adapter-dev
           download_release rptadv-rnnoise-adapter v0.1.0-alpha.2 \
             librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev
-          download_release librptadvsquelch v0.1.0-alpha.1 librptadvsquelch1 librptadvsquelch-dev
-          download_release librptadvctcss v0.1.0-alpha.1 librptadvctcss1 librptadvctcss-dev
+          download_release librptadvsquelch v0.1.0-alpha.2 librptadvsquelch2 librptadvsquelch-dev
+          download_release librptadvctcss v0.1.0-alpha.2 librptadvctcss2 librptadvctcss-dev
           download_release librptadvdcs v0.1.0-alpha.1 librptadvdcs1 librptadvdcs-dev
           download_release librptadvsignaling v0.1.0-alpha.1 librptadvsignaling1 librptadvsignaling-dev
         fi
@@ -124,8 +124,8 @@ runs:
             rate_adjusting_pcm_ring|rptadv-samplerate-adapter) ;;
             librptadvradio) packages=(librptadvradio4 librptadvradio-dev) ;;
             rptadv-gpio-adapter) packages=(librptadv-gpio-adapter1 librptadv-gpio-adapter-dev) ;;
-            librptadvsquelch) packages=(librptadvsquelch1 librptadvsquelch-dev) ;;
-            librptadvctcss) packages=(librptadvctcss1 librptadvctcss-dev) ;;
+            librptadvsquelch) packages=(librptadvsquelch2 librptadvsquelch-dev) ;;
+            librptadvctcss) packages=(librptadvctcss2 librptadvctcss-dev) ;;
             librptadvdcs) packages=(librptadvdcs1 librptadvdcs-dev) ;;
             librptadvsignaling) packages=(librptadvsignaling1 librptadvsignaling-dev) ;;
             librptadvtone) packages=(librptadvtone1 librptadvtone-dev) ;;
@@ -151,8 +151,10 @@ runs:
           test -f "$(pkg-config --variable=libdir rptadvradio)/librptadvradio.so.4"
           test -f "$(pkg-config --variable=libdir rptadv_gpio_adapter)/librptadv_gpio_adapter.so.1"
           for provider in rptadvsquelch rptadvctcss rptadvdcs rptadvsignaling; do
-            test "$(pkg-config --variable=abi_version "$provider")" = 1
-            test -f "$(pkg-config --variable=libdir "$provider")/lib$provider.so.1"
+            abi=1
+            case "$provider" in rptadvsquelch|rptadvctcss) abi=2 ;; esac
+            test "$(pkg-config --variable=abi_version "$provider")" = "$abi"
+            test -f "$(pkg-config --variable=libdir "$provider")/lib$provider.so.$abi"
           done
           test -f "$(pkg-config --variable=libdir rate_adjusting_pcm_ring3)/librate_adjusting_pcm_ring3.so.3"
           test "$(pkg-config --variable=abi_version rptadv_samplerate_adapter)" = 2

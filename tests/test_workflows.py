@@ -423,14 +423,14 @@ gh() {
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(log.read_text().splitlines(), [
                 "rate_adjusting_pcm_ring v3.0.0-alpha2 librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev",
-                "librptadvradio v0.1.0-alpha.7 librptadvradio4 librptadvradio-dev",
+                "librptadvradio v0.1.0-alpha.8 librptadvradio4 librptadvradio-dev",
                 "rptadv-samplerate-adapter v0.2.0-alpha1 librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev",
                 "rptadv-ffmpeg-adapter v0.1.0-alpha.2 librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev",
                 "rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
                 "rptadv-gpio-adapter v0.1.0-alpha.3 librptadv-gpio-adapter1 librptadv-gpio-adapter-dev",
                 "rptadv-rnnoise-adapter v0.1.0-alpha.2 librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev",
-                "librptadvsquelch v0.1.0-alpha.1 librptadvsquelch1 librptadvsquelch-dev",
-                "librptadvctcss v0.1.0-alpha.1 librptadvctcss1 librptadvctcss-dev",
+                "librptadvsquelch v0.1.0-alpha.2 librptadvsquelch2 librptadvsquelch-dev",
+                "librptadvctcss v0.1.0-alpha.2 librptadvctcss2 librptadvctcss-dev",
                 "librptadvdcs v0.1.0-alpha.1 librptadvdcs1 librptadvdcs-dev",
                 "librptadvsignaling v0.1.0-alpha.1 librptadvsignaling1 librptadvsignaling-dev",
             ])
@@ -489,26 +489,33 @@ gh() {
         with tempfile.TemporaryDirectory() as work:
             log = Path(work) / "download.log"
             releases = [
-                (f"librptadv{component}", (f"librptadv{component}1", f"librptadv{component}-dev"))
+                ("librptadvsquelch", "v0.1.0-alpha.2",
+                 ("librptadvsquelch2", "librptadvsquelch-dev")),
+                ("librptadvctcss", "v0.1.0-alpha.2",
+                 ("librptadvctcss2", "librptadvctcss-dev")),
+            ] + [
+                (f"librptadv{component}", "v0.1.0-alpha.1",
+                 (f"librptadv{component}1", f"librptadv{component}-dev"))
                 for component in (
-                    "squelch", "ctcss", "dcs", "signaling", "tone", "morse",
-                    "dtmf", "template", "schedule",
+                    "dcs", "signaling", "tone", "morse", "dtmf", "template", "schedule",
                 )
             ] + [
-                ("librptadvradio", ("librptadvradio4", "librptadvradio-dev")),
-                ("rptadv-gpio-adapter", ("librptadv-gpio-adapter1", "librptadv-gpio-adapter-dev")),
+                ("librptadvradio", "v0.1.0-alpha.8",
+                 ("librptadvradio4", "librptadvradio-dev")),
+                ("rptadv-gpio-adapter", "v0.1.0-alpha.3",
+                 ("librptadv-gpio-adapter1", "librptadv-gpio-adapter-dev")),
             ]
-            for repository, packages in releases:
+            for repository, tag, packages in releases:
                 with self.subTest(repository=repository):
                     result = subprocess.run(
                         ["bash", "-c", script],
                         env=dict(os.environ, RELEASED_REPOSITORY=f"cpeter1207/{repository}",
-                                 RELEASED_TAG="v0.1.0-alpha.1", DOWNLOAD_LOG=str(log)),
+                                 RELEASED_TAG=tag, DOWNLOAD_LOG=str(log)),
                         text=True, capture_output=True, check=False,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(log.read_text().splitlines(), [
-                        repository, "v0.1.0-alpha.1", *packages,
+                        repository, tag, *packages,
                     ])
                     log.unlink()
             for repository, tag in (("cpeter1207/unrelated", "v0.1.0-alpha.1"),
@@ -535,17 +542,17 @@ gh() {
                 check=True,
             ).stdout.strip()
             assets = []
-            names = ("librptadvsquelch1", "librptadvsquelch-dev")
+            names = ("librptadvsquelch2", "librptadvsquelch-dev")
             for package in names:
                 source_dir = directory / package
                 control = source_dir / "DEBIAN/control"
                 control.parent.mkdir(parents=True)
                 control.write_text(
-                    f"Package: {package}\nVersion: 0.1.0.alpha1-1\n"
+                    f"Package: {package}\nVersion: 0.1.0.alpha2-1\n"
                     f"Architecture: {architecture}\nMaintainer: Test <test@example.org>\n"
                     "Description: Test package\n"
                 )
-                filename = f"{package}_0.1.0.alpha1-1_{architecture}.deb"
+                filename = f"{package}_0.1.0.alpha2-1_{architecture}.deb"
                 package_file = directory / filename
                 subprocess.run(["dpkg-deb", "--build", str(source_dir), str(package_file)],
                                check=True, capture_output=True)
@@ -562,7 +569,7 @@ gh() {
             gh.write_text(
                 "#!/bin/sh\n"
                 "printf '%s\\n' \"$*\" >> \"$GH_LOG\"\n"
-                "test \"$*\" = 'api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.1' || exit 72\n"
+                "test \"$*\" = 'api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.2' || exit 72\n"
                 "cat \"$RELEASE_METADATA\"\n"
             )
             gh.chmod(0o755)
@@ -576,11 +583,11 @@ gh() {
                          INSTALL_PACKAGES="false", RING_VERSION="v3.0.0-alpha.2",
                          SAMPLERATE_ADAPTER_VERSION="v0.2.0-alpha.1",
                          RELEASED_REPOSITORY="cpeter1207/librptadvsquelch",
-                         RELEASED_TAG="v0.1.0-alpha.1"),
+                         RELEASED_TAG="v0.1.0-alpha.2"),
                 text=True, capture_output=True, check=False,
             )
             self.assertEqual(calls.read_text().splitlines(), [
-                "api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.1"
+                "api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.2"
             ])
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual({path.name for path in (directory / "dependencies/packages").iterdir()},
