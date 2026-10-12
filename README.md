@@ -60,6 +60,7 @@ library's digest-verified packages and refreshes the signed Debian 13 index
 without building new USBRadioPlus integration or product packages. Other
 dependencies and existing consumer packages remain in the preserved repository
 pool; the published-repository verification job still checks the consumers.
+Radio-core and GPIO adapter owner releases use this same index-only route.
 
 Automatic quality and release work runs on native Debian 13 only: amd64
 collects coverage, while amd64 and arm64 both run tests, builds, and staged
