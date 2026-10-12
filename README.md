@@ -52,6 +52,12 @@ The workflow dispatches the released tag to USBRadioPlus, whose existing
 package publisher builds against those exact releases and publishes the signed
 Debian 13 index.
 
+For a released functional library, the same publisher instead downloads its
+digest-verified packages and refreshes the signed Debian 13 index without
+building new USBRadioPlus integration or product packages. Existing consumer
+packages remain in the preserved repository pool and are checked by the
+published-repository verification job.
+
 Automatic quality and release work runs on native Debian 13 only: amd64
 collects coverage, while amd64 and arm64 both run tests, builds, and staged
 installation checks. Debian 12 is aspirational and never runs automatically.

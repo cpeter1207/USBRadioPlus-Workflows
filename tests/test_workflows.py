@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Check release matrix boundaries and shell programs embedded in actions."""
 
 import json
@@ -89,6 +90,70 @@ class WorkflowContracts(unittest.TestCase):
         )
         self.assertIn('libusbradioplus-product1 (= $product_version)', build)
 
+    def test_shared_release_refresh_does_not_build_consumer_packages(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        matrix = source.split("  select_package_matrix:\n", 1)[1].split("  build:\n", 1)[0]
+        self.assertIn("INDEX_ONLY: ${{ inputs.released_repository != '' }}", matrix)
+        self.assertIn('if [[ "$INCLUDE_DEBIAN12" == "true" && "$INDEX_ONLY" != "true" ]]', matrix)
+        matrix_script = textwrap.dedent(matrix.split("        run: |\n", 1)[1])
+        subprocess.run(["shellcheck", "--shell=bash", "-"], input=matrix_script,
+                       text=True, check=True)
+        with tempfile.TemporaryDirectory() as work:
+            output = Path(work) / "output"
+            result = subprocess.run(
+                ["bash", "-c", matrix_script],
+                env=dict(os.environ, INCLUDE_DEBIAN12="true", INDEX_ONLY="true",
+                         GITHUB_OUTPUT=str(output)),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            selected = dict(line.split("=", 1) for line in output.read_text().splitlines())
+            self.assertEqual({entry["suite"] for entry in json.loads(selected["build_matrix"])["include"]},
+                             {"trixie"})
+        build = source.split("  build:\n", 1)[1].split("  publish:\n", 1)[0]
+        for step in (
+            "actions/checkout@v7", "Trust checked-out workspace",
+            "Require the previously passed pull-request gate",
+            "Install ASL3 repository and package tools",
+            "Install manually published Debian 12 dependencies",
+            "Install RNNoise companion packages",
+            "Build USBRadioPlus integration and product packages",
+        ):
+            with self.subTest(step=step):
+                match = re.search(
+                    rf"(?m)^      - (?:uses: |name: ){re.escape(step)}\n"
+                    r"(?:(?!^      - ).*\n)*", build,
+                )
+                self.assertIsNotNone(match, step)
+                self.assertIn("if: inputs.released_repository == ''", match.group(0))
+        downloader = build.split("      - name: Install released shared dependencies\n", 1)[1].split(
+            "      - name:", 1
+        )[0]
+        self.assertIn("install: ${{ inputs.released_repository == '' }}", downloader)
+        staging = build.split("      - name: Stage released shared packages for signed index\n", 1)[1].split(
+            "      - uses: actions/upload-artifact", 1
+        )[0]
+        self.assertIn("if: inputs.released_repository != ''", staging)
+        self.assertIn("SHARED_PACKAGE_DIRECTORY: ${{ steps.shared.outputs.package-directory }}", staging)
+        script = textwrap.dedent(staging.split("        run: |\n", 1)[1])
+        subprocess.run(["shellcheck", "--shell=bash", "-"], input=script,
+                       text=True, check=True)
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            verified = directory / "verified"
+            verified.mkdir()
+            expected = {"librptadvtone1_0.1_amd64.deb", "librptadvtone-dev_0.1_amd64.deb"}
+            for name in expected:
+                (verified / name).write_text(name)
+            (directory / "usbradioplus_0.1_amd64.deb").write_text("not released")
+            result = subprocess.run(
+                ["bash", "-c", script], cwd=directory,
+                env=dict(os.environ, SHARED_PACKAGE_DIRECTORY=str(verified)),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual({path.name for path in (directory / "package-output").iterdir()}, expected)
+
     def test_composite_action_shell_programs(self):
         for path in sorted((ROOT / "actions").glob("*/action.yml")):
             source = path.read_text()
@@ -176,7 +241,8 @@ gh() {
         container = "containers / Required container gate"
 
         def check(identifier, name, conclusion, status="completed"):
-            return dict(id=identifier, name=name, conclusion=conclusion, status=status)
+            return {"id": identifier, "name": name, "conclusion": conclusion,
+                    "status": status}
 
         older = [check(1, quality, "failure"), check(2, container, "failure")]
         scenarios = (
@@ -194,11 +260,11 @@ gh() {
         )
         for name, first, second, expected in scenarios:
             with self.subTest(name=name):
-                pages = "\n".join(json.dumps(dict(check_runs=page)) for page in (first, second))
+                pages = "\n".join(json.dumps({"check_runs": page}) for page in (first, second))
                 result = subprocess.run(
                     ["bash", "-c", commands + script],
                     env=dict(os.environ, GITHUB_REPOSITORY="example/source", GATE_PAGES=pages),
-                    text=True, capture_output=True,
+                    text=True, capture_output=True, check=False,
                 )
                 self.assertEqual(result.returncode == 0, expected, result.stderr)
 
@@ -247,7 +313,7 @@ gh() {
                     ["bash", "-c", cleanup.replace("/usr/local", str(local))],
                     env=dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
                              OWN_BOOTSTRAP=str(int(package_owned))),
-                    text=True, capture_output=True,
+                    text=True, capture_output=True, check=False,
                 )
                 self.assertEqual(result.returncode, 1 if package_owned else 0, result.stderr)
                 self.assertEqual(unrelated.read_text(), "preserve")
@@ -287,7 +353,7 @@ gh() {
 
     def test_release_asset_selector_rejects_debian12_and_uses_current_abis(self):
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
-        selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.S).group(1)
+        selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.DOTALL).group(1)
         self.assertNotIn("librate-adjusting-pcm-ring1", source)
         self.assertIn("default: v3.0.0-alpha.2", source)
         self.assertIn("default: v0.2.0-alpha.1", source)
@@ -333,7 +399,7 @@ gh() {
         """A ring3 candidate must survive the installer's released fallback."""
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         function = textwrap.dedent(re.search(
-            r"(?m)^        download_release\(\) \{\n.*?^        \}\n", source, re.S
+            r"(?m)^        download_release\(\) \{\n.*?^        \}\n", source, re.DOTALL
         ).group(0))
         with tempfile.TemporaryDirectory() as work:
             directory = Path(work)
@@ -346,7 +412,7 @@ gh() {
             result = subprocess.run(
                 ["bash", "-c", "set -euo pipefail\ngh() { return 79; }\n" + function
                  + "\ndownload_release rate_adjusting_pcm_ring old-tag librate-adjusting-pcm-ring3"],
-                cwd=directory, text=True, capture_output=True,
+                cwd=directory, text=True, capture_output=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -389,7 +455,7 @@ gh() {
                         ["bash", "-c", script],
                         env=dict(os.environ, RELEASED_REPOSITORY=f"cpeter1207/{repository}",
                                  RELEASED_TAG="v0.1.0-alpha.1", DOWNLOAD_LOG=str(log)),
-                        text=True, capture_output=True,
+                        text=True, capture_output=True, check=False,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(log.read_text().splitlines(), [
@@ -405,7 +471,7 @@ gh() {
                         ["bash", "-c", script],
                         env=dict(os.environ, RELEASED_REPOSITORY=repository,
                                  RELEASED_TAG=tag, DOWNLOAD_LOG=str(log)),
-                        text=True, capture_output=True,
+                        text=True, capture_output=True, check=False,
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertFalse(log.exists())
@@ -438,7 +504,8 @@ gh() {
                 SAMPLERATE_ADAPTER_TAG="v0.2.0-alpha.1",
             )
             result = subprocess.run(
-                ["bash", "-c", script], env=environment, text=True, capture_output=True
+                ["bash", "-c", script], env=environment, text=True, capture_output=True,
+                check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             arguments = args_log.read_text()
@@ -459,7 +526,8 @@ gh() {
             body_log.unlink()
             environment["PACKAGE_REPOSITORY"] = "untrusted/repository"
             result = subprocess.run(
-                ["bash", "-c", script], env=environment, text=True, capture_output=True
+                ["bash", "-c", script], env=environment, text=True, capture_output=True,
+                check=False,
             )
             self.assertEqual(result.returncode, 2)
             self.assertFalse(args_log.exists())
@@ -472,7 +540,7 @@ gh() {
                     environment["PACKAGE_REPOSITORY"] = f"cpeter1207/librptadv{component}"
                     result = subprocess.run(
                         ["bash", "-c", script], env=environment,
-                        text=True, capture_output=True,
+                        text=True, capture_output=True, check=False,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(

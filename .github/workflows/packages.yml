@@ -65,13 +65,14 @@ jobs:
         shell: bash
         env:
           INCLUDE_DEBIAN12: ${{ inputs.include_debian12 }}
+          INDEX_ONLY: ${{ inputs.released_repository != '' }}
         run: |
           set -euo pipefail
           # Debian 12 remains available only when an explicit manual caller
           # requests it; ordinary releases publish Debian 13 artifacts alone.
           build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm"}]}'
           verify_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","asl":"3.9.3"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04","asl":"3.10.5"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","asl":"3.9.3"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm","asl":"3.10.5"}]}'
-          if [[ "$INCLUDE_DEBIAN12" == "true" ]]; then
+          if [[ "$INCLUDE_DEBIAN12" == "true" && "$INDEX_ONLY" != "true" ]]; then
             build_matrix='{"include":[{"debian":"13","suite":"trixie","runner":"ubuntu-24.04"},{"debian":"13","suite":"trixie","runner":"ubuntu-24.04-arm"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04"},{"debian":"12","suite":"bookworm","runner":"ubuntu-24.04-arm"}]}'
           fi
           printf 'build_matrix=%s\n' "$build_matrix" >> "$GITHUB_OUTPUT"
@@ -95,14 +96,18 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates git gh jq
       - uses: actions/checkout@v7
+        if: inputs.released_repository == ''
         with:
           ref: ${{ inputs.source_ref }}
           fetch-depth: 0
       - name: Trust checked-out workspace
+        if: inputs.released_repository == ''
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Require the previously passed pull-request gate
+        if: inputs.released_repository == ''
         uses: cpeter1207/USBRadioPlus-Workflows/actions/verify-main-gate@main
       - name: Install ASL3 repository and package tools
+        if: inputs.released_repository == ''
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y wget devscripts \
@@ -128,8 +133,9 @@ jobs:
           samplerate-adapter-version: ${{ inputs.samplerate_adapter_version }}
           released-repository: ${{ inputs.released_repository }}
           released-tag: ${{ inputs.released_tag }}
+          install: ${{ inputs.released_repository == '' }}
       - name: Install manually published Debian 12 dependencies
-        if: matrix.debian == '12'
+        if: inputs.released_repository == '' && matrix.debian == '12'
         run: |
           install -d /etc/apt/keyrings
           install -m 0644 packaging/repository/usbradioplus-archive-keyring.gpg \
@@ -143,12 +149,14 @@ jobs:
             librptadv-portaudio-alsa-adapter-dev librptadv-gpio-adapter-dev \
             librptadv-rnnoise-adapter-dev
       - name: Install RNNoise companion packages
+        if: inputs.released_repository == ''
         id: rnnoise
         uses: cpeter1207/USBRadioPlus-Workflows/actions/install-rnnoise-packages@main
         with:
           debian: ${{ matrix.debian }}
           suite: ${{ matrix.suite }}
       - name: Build USBRadioPlus integration and product packages
+        if: inputs.released_repository == ''
         id: usbradioplus_build
         run: |
           set -eux
@@ -199,6 +207,14 @@ jobs:
             librptadv-rnnoise-adapter1; do
             dpkg-deb -f ../libusbradioplus-product1_*.deb Depends | grep -F "$library"
           done
+      - name: Stage released shared packages for signed index
+        if: inputs.released_repository != ''
+        env:
+          SHARED_PACKAGE_DIRECTORY: ${{ steps.shared.outputs.package-directory }}
+        run: |
+          set -euo pipefail
+          mkdir -p package-output
+          cp "$SHARED_PACKAGE_DIRECTORY"/*.deb package-output/
       - uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.suite }}-${{ runner.arch }}
