@@ -89,6 +89,70 @@ class WorkflowContracts(unittest.TestCase):
         )
         self.assertIn('libusbradioplus-product1 (= $product_version)', build)
 
+    def test_shared_release_refresh_does_not_build_consumer_packages(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        matrix = source.split("  select_package_matrix:\n", 1)[1].split("  build:\n", 1)[0]
+        self.assertIn("INDEX_ONLY: ${{ inputs.released_repository != '' }}", matrix)
+        self.assertIn('if [[ "$INCLUDE_DEBIAN12" == "true" && "$INDEX_ONLY" != "true" ]]', matrix)
+        matrix_script = textwrap.dedent(matrix.split("        run: |\n", 1)[1])
+        subprocess.run(["shellcheck", "--shell=bash", "-"], input=matrix_script,
+                       text=True, check=True)
+        with tempfile.TemporaryDirectory() as work:
+            output = Path(work) / "output"
+            result = subprocess.run(
+                ["bash", "-c", matrix_script],
+                env=dict(os.environ, INCLUDE_DEBIAN12="true", INDEX_ONLY="true",
+                         GITHUB_OUTPUT=str(output)),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            selected = dict(line.split("=", 1) for line in output.read_text().splitlines())
+            self.assertEqual({entry["suite"] for entry in json.loads(selected["build_matrix"])["include"]},
+                             {"trixie"})
+        build = source.split("  build:\n", 1)[1].split("  publish:\n", 1)[0]
+        for step in (
+            "actions/checkout@v7", "Trust checked-out workspace",
+            "Require the previously passed pull-request gate",
+            "Install ASL3 repository and package tools",
+            "Install manually published Debian 12 dependencies",
+            "Install RNNoise companion packages",
+            "Build USBRadioPlus integration and product packages",
+        ):
+            with self.subTest(step=step):
+                match = re.search(
+                    rf"(?m)^      - (?:uses: |name: ){re.escape(step)}\n"
+                    r"(?:(?!^      - ).*\n)*", build,
+                )
+                self.assertIsNotNone(match, step)
+                self.assertIn("if: inputs.released_repository == ''", match.group(0))
+        downloader = build.split("      - name: Install released shared dependencies\n", 1)[1].split(
+            "      - name:", 1
+        )[0]
+        self.assertIn("install: ${{ inputs.released_repository == '' }}", downloader)
+        staging = build.split("      - name: Stage released shared packages for signed index\n", 1)[1].split(
+            "      - uses: actions/upload-artifact", 1
+        )[0]
+        self.assertIn("if: inputs.released_repository != ''", staging)
+        self.assertIn("SHARED_PACKAGE_DIRECTORY: ${{ steps.shared.outputs.package-directory }}", staging)
+        script = textwrap.dedent(staging.split("        run: |\n", 1)[1])
+        subprocess.run(["shellcheck", "--shell=bash", "-"], input=script,
+                       text=True, check=True)
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            verified = directory / "verified"
+            verified.mkdir()
+            expected = {"librptadvtone1_0.1_amd64.deb", "librptadvtone-dev_0.1_amd64.deb"}
+            for name in expected:
+                (verified / name).write_text(name)
+            (directory / "usbradioplus_0.1_amd64.deb").write_text("not released")
+            result = subprocess.run(
+                ["bash", "-c", script], cwd=directory,
+                env=dict(os.environ, SHARED_PACKAGE_DIRECTORY=str(verified)),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual({path.name for path in (directory / "package-output").iterdir()}, expected)
+
     def test_composite_action_shell_programs(self):
         for path in sorted((ROOT / "actions").glob("*/action.yml")):
             source = path.read_text()
