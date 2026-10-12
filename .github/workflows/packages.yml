@@ -28,6 +28,16 @@ on:
         required: false
         default: v0.2.0-alpha.1
         type: string
+      released_repository:
+        description: Allowlisted repository from a published shared-library release.
+        required: false
+        default: ''
+        type: string
+      released_tag:
+        description: Published tag from that repository.
+        required: false
+        default: ''
+        type: string
     secrets:
       APT_SIGNING_KEY:
         required: true
@@ -116,6 +126,8 @@ jobs:
         with:
           ring-version: ${{ inputs.ring_version }}
           samplerate-adapter-version: ${{ inputs.samplerate_adapter_version }}
+          released-repository: ${{ inputs.released_repository }}
+          released-tag: ${{ inputs.released_tag }}
       - name: Install manually published Debian 12 dependencies
         if: matrix.debian == '12'
         run: |
