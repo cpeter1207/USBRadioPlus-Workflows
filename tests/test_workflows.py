@@ -356,8 +356,8 @@ gh() {
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         selector = re.search(r"asset=\$\(jq.*?'(.*?)' <<<", source, re.DOTALL).group(1)
         self.assertNotIn("librate-adjusting-pcm-ring1", source)
-        self.assertIn("default: v3.0.0-alpha.2", source)
-        self.assertIn("default: v0.2.0-alpha.1", source)
+        self.assertIn("default: v3.0.0-alpha2", source)
+        self.assertIn("default: v0.2.0-alpha1", source)
         self.assertIn("librptadvradio4", source)
         self.assertIn("librptadv-portaudio-alsa-adapter2", source)
         self.assertIn("librptadv-rnnoise-adapter1", source)
@@ -395,6 +395,48 @@ gh() {
             "download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3",
             source,
         )
+
+    def test_normal_download_route_uses_released_owner_and_provider_versions(self):
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        ring_tag = re.search(r"(?ms)^  ring-version:\n.*?^    default: ([^\n]+)", source).group(1)
+        samplerate_tag = re.search(
+            r"(?ms)^  samplerate-adapter-version:\n.*?^    default: ([^\n]+)", source
+        ).group(1)
+        route = source.split(
+            '        if [[ -z "$RELEASED_REPOSITORY" || "$INSTALL_PACKAGES" != false ]]; then\n', 1
+        )[1].split('        if [[ -n "$RELEASED_REPOSITORY$RELEASED_TAG" ]]; then\n', 1)[0]
+        script = (
+            'set -euo pipefail\n'
+            'download_release() { printf "%s\\n" "$*" >> "$DOWNLOAD_LOG"; }\n'
+            'if [[ -z "$RELEASED_REPOSITORY" || "$INSTALL_PACKAGES" != false ]]; then\n'
+            + textwrap.dedent(route)
+        )
+        with tempfile.TemporaryDirectory() as work:
+            log = Path(work) / "downloads.log"
+            result = subprocess.run(
+                ["bash", "-c", script],
+                env=dict(os.environ, DOWNLOAD_LOG=str(log), RELEASED_REPOSITORY="",
+                         INSTALL_PACKAGES="false", RING_VERSION=ring_tag,
+                         SAMPLERATE_ADAPTER_VERSION=samplerate_tag),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(log.read_text().splitlines(), [
+                "rate_adjusting_pcm_ring v3.0.0-alpha2 librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev",
+                "librptadvradio v0.1.0-alpha.7 librptadvradio4 librptadvradio-dev",
+                "rptadv-samplerate-adapter v0.2.0-alpha1 librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev",
+                "rptadv-ffmpeg-adapter v0.1.0-alpha.2 librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev",
+                "rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
+                "rptadv-gpio-adapter v0.1.0-alpha.3 librptadv-gpio-adapter1 librptadv-gpio-adapter-dev",
+                "rptadv-rnnoise-adapter v0.1.0-alpha.2 librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev",
+                "librptadvsquelch v0.1.0-alpha.1 librptadvsquelch1 librptadvsquelch-dev",
+                "librptadvctcss v0.1.0-alpha.1 librptadvctcss1 librptadvctcss-dev",
+                "librptadvdcs v0.1.0-alpha.1 librptadvdcs1 librptadvdcs-dev",
+                "librptadvsignaling v0.1.0-alpha.1 librptadvsignaling1 librptadvsignaling-dev",
+            ])
+        workflow = (ROOT / ".github/workflows/packages.yml").read_text()
+        self.assertIn("default: v3.0.0-alpha2", workflow)
+        self.assertIn("default: v0.2.0-alpha1", workflow)
 
     def test_candidate_pin_is_not_replaced_with_an_older_release(self):
         """A ring3 candidate must survive the installer's released fallback."""

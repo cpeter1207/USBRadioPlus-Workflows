@@ -21,12 +21,12 @@ on:
       ring_version:
         description: Released rate-adjusting PCM ring tag.
         required: false
-        default: v3.0.0-alpha.2
+        default: v3.0.0-alpha2
         type: string
       samplerate_adapter_version:
         description: Released sample-rate adapter tag.
         required: false
-        default: v0.2.0-alpha.1
+        default: v0.2.0-alpha1
         type: string
       released_repository:
         description: Allowlisted repository from a published shared-library release.
