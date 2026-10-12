@@ -360,6 +360,56 @@ gh() {
             source,
         )
 
+    def test_package_workflow_forwards_only_released_library_identity(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        self.assertIn("released_repository:", source)
+        self.assertIn("released_tag:", source)
+        self.assertIn("released-repository: ${{ inputs.released_repository }}", source)
+        self.assertIn("released-tag: ${{ inputs.released_tag }}", source)
+        self.assertNotIn("released-ref:", source)
+
+    def test_new_library_release_downloads_expected_packages(self):
+        source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
+        route = textwrap.dedent(source.split(
+            '        if [[ -n "$RELEASED_REPOSITORY$RELEASED_TAG" ]]; then\n', 1
+        )[1].split('        if [[ "$INSTALL_PACKAGES" == true ]]; then\n', 1)[0])
+        route = 'if [[ -n "$RELEASED_REPOSITORY$RELEASED_TAG" ]]; then\n' + route
+        script = ('set -euo pipefail\n'
+                  'download_release() { printf "%s\\n" "$@" > "$DOWNLOAD_LOG"; }\n'
+                  + route)
+        with tempfile.TemporaryDirectory() as work:
+            log = Path(work) / "download.log"
+            for component in (
+                "squelch", "ctcss", "dcs", "signaling", "tone", "morse",
+                "dtmf", "template", "schedule",
+            ):
+                repository = f"librptadv{component}"
+                with self.subTest(repository=repository):
+                    result = subprocess.run(
+                        ["bash", "-c", script],
+                        env=dict(os.environ, RELEASED_REPOSITORY=f"cpeter1207/{repository}",
+                                 RELEASED_TAG="v0.1.0-alpha.1", DOWNLOAD_LOG=str(log)),
+                        text=True, capture_output=True,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(log.read_text().splitlines(), [
+                        repository, "v0.1.0-alpha.1",
+                        f"{repository}1", f"{repository}-dev",
+                    ])
+                    log.unlink()
+            for repository, tag in (("cpeter1207/unrelated", "v0.1.0-alpha.1"),
+                                    ("cpeter1207/librptadvtone", "main"),
+                                    ("cpeter1207/librptadvtone", "")):
+                with self.subTest(repository=repository, tag=tag):
+                    result = subprocess.run(
+                        ["bash", "-c", script],
+                        env=dict(os.environ, RELEASED_REPOSITORY=repository,
+                                 RELEASED_TAG=tag, DOWNLOAD_LOG=str(log)),
+                        text=True, capture_output=True,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(log.exists())
+
     def test_shared_package_dispatch_is_limited_and_includes_release_metadata(self):
         source = (ROOT / "actions/dispatch-package-index/action.yml").read_text()
         script = textwrap.dedent(re.search(
@@ -413,6 +463,22 @@ gh() {
             )
             self.assertEqual(result.returncode, 2)
             self.assertFalse(args_log.exists())
+
+            for component in (
+                "squelch", "ctcss", "dcs", "signaling", "tone", "morse",
+                "dtmf", "template", "schedule",
+            ):
+                with self.subTest(component=component):
+                    environment["PACKAGE_REPOSITORY"] = f"cpeter1207/librptadv{component}"
+                    result = subprocess.run(
+                        ["bash", "-c", script], env=environment,
+                        text=True, capture_output=True,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(
+                        json.loads(body_log.read_text())["client_payload"]["repository"],
+                        f"cpeter1207/librptadv{component}",
+                    )
 
 
 if __name__ == "__main__":

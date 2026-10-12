@@ -11,6 +11,12 @@ inputs:
   samplerate-adapter-version:
     description: Released version of the sample-rate adapter.
     default: v0.2.0-alpha.1
+  released-repository:
+    description: Allowlisted shared-library repository whose published release prompted an index refresh.
+    default: ''
+  released-tag:
+    description: Published tag from that repository.
+    default: ''
   package-directory:
     description: Directory retaining the release packages for publishing or a Docker build context.
     default: dependencies/packages
@@ -47,6 +53,8 @@ runs:
         INSTALL_PACKAGES: ${{ inputs.install }}
         RING_VERSION: ${{ inputs.ring-version }}
         SAMPLERATE_ADAPTER_VERSION: ${{ inputs.samplerate-adapter-version }}
+        RELEASED_REPOSITORY: ${{ inputs.released-repository }}
+        RELEASED_TAG: ${{ inputs.released-tag }}
       run: |
         set -euo pipefail
         architecture=$(dpkg --print-architecture)
@@ -57,9 +65,11 @@ runs:
           repository=$1
           tag=$2
           shift 2
+          released_repository=${RELEASED_REPOSITORY:-}
+          released_repository=${released_repository#cpeter1207/}
           # An immutable source pin supplies an unreleased ABI; do not overwrite it
           # with an older released package having the same Debian version.
-          if [[ -f .github/dependencies.json ]] &&
+          if [[ "$repository" != "$released_repository" && -f .github/dependencies.json ]] &&
             jq -e --arg repository "$repository" 'any(.[]; .repository == $repository)' \
               .github/dependencies.json >/dev/null; then return; fi
           metadata=$(gh api "repos/cpeter1207/$repository/releases/tags/$tag")
@@ -95,6 +105,31 @@ runs:
           librptadv-gpio-adapter1 librptadv-gpio-adapter-dev
         download_release rptadv-rnnoise-adapter v0.1.0-alpha.2 \
           librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev
+        if [[ -n "$RELEASED_REPOSITORY$RELEASED_TAG" ]]; then
+          test -n "$RELEASED_REPOSITORY" && test -n "$RELEASED_TAG"
+          [[ "$RELEASED_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]
+          case "$RELEASED_REPOSITORY" in
+            cpeter1207/*) RELEASED_REPOSITORY=${RELEASED_REPOSITORY#cpeter1207/} ;;
+            *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
+          esac
+          packages=()
+          case "$RELEASED_REPOSITORY" in
+            rate_adjusting_pcm_ring|rptadv-samplerate-adapter) ;;
+            librptadvsquelch) packages=(librptadvsquelch1 librptadvsquelch-dev) ;;
+            librptadvctcss) packages=(librptadvctcss1 librptadvctcss-dev) ;;
+            librptadvdcs) packages=(librptadvdcs1 librptadvdcs-dev) ;;
+            librptadvsignaling) packages=(librptadvsignaling1 librptadvsignaling-dev) ;;
+            librptadvtone) packages=(librptadvtone1 librptadvtone-dev) ;;
+            librptadvmorse) packages=(librptadvmorse1 librptadvmorse-dev) ;;
+            librptadvdtmf) packages=(librptadvdtmf1 librptadvdtmf-dev) ;;
+            librptadvtemplate) packages=(librptadvtemplate1 librptadvtemplate-dev) ;;
+            librptadvschedule) packages=(librptadvschedule1 librptadvschedule-dev) ;;
+            *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
+          esac
+          if [[ ${#packages[@]} -gt 0 ]]; then
+            download_release "$RELEASED_REPOSITORY" "$RELEASED_TAG" "${packages[@]}"
+          fi
+        fi
         if [[ "$INSTALL_PACKAGES" == true ]]; then
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y "$package_directory"/*.deb
