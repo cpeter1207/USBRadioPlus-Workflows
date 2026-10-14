@@ -338,6 +338,11 @@ gh() {
             "/incoming/librptadv-portaudio-alsa-adapter1_0.1.0.alpha2-1_amd64.deb",
             "/incoming/librnnoise0_0.2-1_amd64.deb",
             "/incoming/librnnoise-dev_0.2-1_arm64.deb",
+            "/incoming/rpt-advanced_0.1.0.alpha9-1_arm64.deb",
+            "/incoming/app-rpt-advanced_0.1.0.alpha9-1_amd64.deb",
+            "/incoming/librptadv-resolver-adapter1_0.1.0.alpha9-1_arm64.deb",
+            "/incoming/librptadv-jitter-adapter1_0.1.0.alpha9-1_amd64.deb",
+            "/incoming/librptadv-iax2-client1_0.1.0.alpha5_arm64.deb",
         ]
         obsolete = [
             "/incoming/usbradioplus-asl3105_0.1.0~alpha17-1.deb13+modern.asl3105_arm64.deb",
@@ -348,8 +353,9 @@ gh() {
                   + '\nprintf "%s:%s\\n" "$package" "$suite"\ndone\n')
         result = subprocess.run(
             ["bash", "-c", script, "repository-classifier", *retained, *obsolete],
-            text=True, check=True, capture_output=True,
+            text=True, check=False, capture_output=True,
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [f"{path}:trixie" for path in retained])
 
     def test_release_asset_selector_rejects_debian12_and_uses_current_abis(self):
@@ -532,10 +538,25 @@ gh() {
                     self.assertFalse(log.exists())
 
     def test_index_only_downloads_only_requested_release(self):
-        self.assert_index_only_downloads([(
-            "librptadvsquelch", "v0.1.0-alpha.2",
-            ("librptadvsquelch2", "librptadvsquelch-dev"),
-        )])
+        releases = [
+            ("librptadvsquelch", "v0.1.0-alpha.2",
+             ("librptadvsquelch2", "librptadvsquelch-dev")),
+            ("librptadviax2", "v0.1.0-alpha5",
+             ("librptadv-iax2-client1", "librptadv-iax2-client-dev")),
+            ("rpt_advanced", "v0.1.0-alpha9", (
+                "rpt-advanced", "app-rpt-advanced",
+                "librptadv-product1", "librptadv-product-dev",
+                "librptadv-file-adapter1", "librptadv-file-adapter-dev",
+                "librptadv-speech-adapter1", "librptadv-speech-adapter-dev",
+                "librptadv-control-asterisk-adapter1", "librptadv-control-asterisk-adapter-dev",
+                "librptadv-control-standalone-adapter1", "librptadv-control-standalone-adapter-dev",
+                "librptadv-resolver-adapter1", "librptadv-resolver-adapter-dev",
+                "librptadv-jitter-adapter1", "librptadv-jitter-adapter-dev",
+            )),
+        ]
+        for release in releases:
+            with self.subTest(repository=release[0]):
+                self.assert_index_only_downloads([release])
 
     def test_index_only_ring_downloads_released_pair_despite_candidate_pins(self):
         self.assert_index_only_downloads([
@@ -687,6 +708,7 @@ gh() {
                 "librptadvsignaling", "librptadvtone", "librptadvmorse",
                 "librptadvdtmf", "librptadvtemplate", "librptadvschedule",
                 "librptadvradio", "rptadv-gpio-adapter",
+                "librptadviax2", "rpt_advanced",
             ):
                 with self.subTest(repository=repository):
                     environment["PACKAGE_REPOSITORY"] = f"cpeter1207/{repository}"
