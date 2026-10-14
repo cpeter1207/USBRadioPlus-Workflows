@@ -303,7 +303,8 @@ jobs:
           for package in "$INCOMING_DIR"/*.deb; do
             case "$package" in
               */usbradioplus-asl3105_*|*/usbradioplus-asl3105-dbgsym_*) continue ;;
-              */librate-adjusting-pcm-ring*|*/librptadv*|*/librnnoise*_0.2-1_*) suite=trixie ;;
+              */librate-adjusting-pcm-ring*|*/librptadv*|*/librnnoise*_0.2-1_*|\
+              */rpt-advanced_*|*/app-rpt-advanced_*) suite=trixie ;;
               *.deb12_*|*.deb12+*_*)
                 if [[ "$INCLUDE_DEBIAN12" != "true" ]]; then
                   continue

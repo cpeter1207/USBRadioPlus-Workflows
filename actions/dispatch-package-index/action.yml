@@ -35,7 +35,8 @@ runs:
           cpeter1207/librptadvdcs|cpeter1207/librptadvsignaling|\
           cpeter1207/librptadvtone|cpeter1207/librptadvmorse|\
           cpeter1207/librptadvdtmf|cpeter1207/librptadvtemplate|\
-          cpeter1207/librptadvschedule) ;;
+          cpeter1207/librptadvschedule|cpeter1207/librptadviax2|\
+          cpeter1207/rpt_advanced) ;;
           *) echo "Unapproved package source: $PACKAGE_REPOSITORY" >&2; exit 2 ;;
         esac
         [[ "$PACKAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]

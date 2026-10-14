@@ -134,6 +134,19 @@ runs:
             librptadvdtmf) packages=(librptadvdtmf1 librptadvdtmf-dev) ;;
             librptadvtemplate) packages=(librptadvtemplate1 librptadvtemplate-dev) ;;
             librptadvschedule) packages=(librptadvschedule1 librptadvschedule-dev) ;;
+            librptadviax2) packages=(librptadv-iax2-client1 librptadv-iax2-client-dev) ;;
+            rpt_advanced)
+              packages=(
+                rpt-advanced app-rpt-advanced
+                librptadv-product1 librptadv-product-dev
+                librptadv-file-adapter1 librptadv-file-adapter-dev
+                librptadv-speech-adapter1 librptadv-speech-adapter-dev
+                librptadv-control-asterisk-adapter1 librptadv-control-asterisk-adapter-dev
+                librptadv-control-standalone-adapter1 librptadv-control-standalone-adapter-dev
+                librptadv-resolver-adapter1 librptadv-resolver-adapter-dev
+                librptadv-jitter-adapter1 librptadv-jitter-adapter-dev
+              )
+              ;;
             *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
           esac
           download_release "$RELEASED_REPOSITORY" "$RELEASED_TAG" "${packages[@]}"
