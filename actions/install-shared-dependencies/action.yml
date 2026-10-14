@@ -68,9 +68,10 @@ runs:
           shift 2
           released_repository=${RELEASED_REPOSITORY:-}
           released_repository=${released_repository#cpeter1207/}
-          # An immutable source pin supplies an unreleased ABI; do not overwrite it
-          # with an older released package having the same Debian version.
-          if [[ "$repository" != "$released_repository" && -f .github/dependencies.json ]] &&
+          # Product builds retain candidate pins. Index-only refreshes publish
+          # the requested release assets, including a ring's paired adapter.
+          if [[ ( -z "$released_repository" || "${INSTALL_PACKAGES:-true}" != false ) &&
+            "$repository" != "$released_repository" && -f .github/dependencies.json ]] &&
             jq -e --arg repository "$repository" 'any(.[]; .repository == $repository)' \
               .github/dependencies.json >/dev/null; then return; fi
           metadata=$(gh api "repos/cpeter1207/$repository/releases/tags/$tag")
@@ -119,9 +120,9 @@ runs:
             cpeter1207/*) RELEASED_REPOSITORY=${RELEASED_REPOSITORY#cpeter1207/} ;;
             *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
           esac
-          packages=()
           case "$RELEASED_REPOSITORY" in
-            rate_adjusting_pcm_ring|rptadv-samplerate-adapter) ;;
+            rate_adjusting_pcm_ring) packages=(librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev) ;;
+            rptadv-samplerate-adapter) packages=(librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev) ;;
             librptadvradio) packages=(librptadvradio4 librptadvradio-dev) ;;
             rptadv-gpio-adapter) packages=(librptadv-gpio-adapter1 librptadv-gpio-adapter-dev) ;;
             librptadvsquelch) packages=(librptadvsquelch2 librptadvsquelch-dev) ;;
@@ -135,8 +136,10 @@ runs:
             librptadvschedule) packages=(librptadvschedule1 librptadvschedule-dev) ;;
             *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
           esac
-          if [[ ${#packages[@]} -gt 0 ]]; then
-            download_release "$RELEASED_REPOSITORY" "$RELEASED_TAG" "${packages[@]}"
+          download_release "$RELEASED_REPOSITORY" "$RELEASED_TAG" "${packages[@]}"
+          if [[ "$RELEASED_REPOSITORY" == rate_adjusting_pcm_ring ]]; then
+            download_release rptadv-samplerate-adapter "$SAMPLERATE_ADAPTER_VERSION" \
+              librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev
           fi
         fi
         if [[ "$INSTALL_PACKAGES" == true ]]; then

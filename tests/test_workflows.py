@@ -532,6 +532,27 @@ gh() {
                     self.assertFalse(log.exists())
 
     def test_index_only_downloads_only_requested_release(self):
+        self.assert_index_only_downloads([(
+            "librptadvsquelch", "v0.1.0-alpha.2",
+            ("librptadvsquelch2", "librptadvsquelch-dev"),
+        )])
+
+    def test_index_only_ring_downloads_released_pair_despite_candidate_pins(self):
+        self.assert_index_only_downloads([
+            ("rate_adjusting_pcm_ring", "v3.0.0-alpha3",
+             ("librate-adjusting-pcm-ring3", "librate-adjusting-pcm-ring3-dev")),
+            ("rptadv-samplerate-adapter", "v0.2.0-alpha2",
+             ("librptadv-samplerate-adapter2", "librptadv-samplerate-adapter-dev")),
+        ])
+
+    def test_index_only_samplerate_downloads_only_its_release_despite_candidate_pins(self):
+        self.assert_index_only_downloads([(
+            "rptadv-samplerate-adapter", "v0.2.0-alpha2",
+            ("librptadv-samplerate-adapter2", "librptadv-samplerate-adapter-dev"),
+        )])
+
+    def assert_index_only_downloads(self, releases):
+        """Run the action against real Debian assets and a strict GitHub boundary."""
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         download = source.split("    - name: Download released shared libraries\n", 1)[1]
         script = textwrap.dedent(download.split("      run: |\n", 1)[1])
@@ -541,36 +562,48 @@ gh() {
                 ["dpkg", "--print-architecture"], text=True, capture_output=True,
                 check=True,
             ).stdout.strip()
-            assets = []
-            names = ("librptadvsquelch2", "librptadvsquelch-dev")
-            for package in names:
-                source_dir = directory / package
-                control = source_dir / "DEBIAN/control"
-                control.parent.mkdir(parents=True)
-                control.write_text(
-                    f"Package: {package}\nVersion: 0.1.0.alpha2-1\n"
-                    f"Architecture: {architecture}\nMaintainer: Test <test@example.org>\n"
-                    "Description: Test package\n"
-                )
-                filename = f"{package}_0.1.0.alpha2-1_{architecture}.deb"
-                package_file = directory / filename
-                subprocess.run(["dpkg-deb", "--build", str(source_dir), str(package_file)],
-                               check=True, capture_output=True)
-                assets.append({
-                    "name": filename,
-                    "digest": "sha256:" + hashlib.sha256(package_file.read_bytes()).hexdigest(),
-                    "browser_download_url": package_file.as_uri(),
-                })
-            metadata = directory / "release.json"
-            metadata.write_text(json.dumps({"draft": False, "assets": assets}))
+            (directory / ".github").mkdir()
+            (directory / ".github/dependencies.json").write_text(json.dumps([
+                {"repository": repository, "sha": "1" * 40, "packages": list(names)}
+                for repository, _, names in releases
+            ]))
+            filenames = set()
+            responses = []
+            expected_calls = []
+            for repository, tag, names in releases:
+                assets = []
+                version = tag[1:].replace("-", ".") + "-1"
+                for package in names:
+                    source_dir = directory / package
+                    control = source_dir / "DEBIAN/control"
+                    control.parent.mkdir(parents=True)
+                    control.write_text(
+                        f"Package: {package}\nVersion: {version}\n"
+                        f"Architecture: {architecture}\nMaintainer: Test <test@example.org>\n"
+                        "Description: Test package\n"
+                    )
+                    filename = f"{package}_{version}_{architecture}.deb"
+                    package_file = directory / filename
+                    subprocess.run(["dpkg-deb", "--build", str(source_dir), str(package_file)],
+                                   check=True, capture_output=True)
+                    filenames.add(filename)
+                    assets.append({
+                        "name": filename,
+                        "digest": "sha256:" + hashlib.sha256(package_file.read_bytes()).hexdigest(),
+                        "browser_download_url": package_file.as_uri(),
+                    })
+                metadata = directory / f"{repository}.json"
+                metadata.write_text(json.dumps({"draft": False, "assets": assets}))
+                call = f"api repos/cpeter1207/{repository}/releases/tags/{tag}"
+                expected_calls.append(call)
+                responses.append(f"'{call}') cat '{metadata}' ;;\n")
             commands = directory / "bin"
             commands.mkdir()
             gh = commands / "gh"
             gh.write_text(
                 "#!/bin/sh\n"
                 "printf '%s\\n' \"$*\" >> \"$GH_LOG\"\n"
-                "test \"$*\" = 'api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.2' || exit 72\n"
-                "cat \"$RELEASE_METADATA\"\n"
+                "case \"$*\" in\n" + "".join(responses) + "*) exit 72 ;;\nesac\n"
             )
             gh.chmod(0o755)
             calls = directory / "gh.log"
@@ -578,20 +611,18 @@ gh() {
             result = subprocess.run(
                 ["bash", "-c", script], cwd=directory,
                 env=dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
-                         GH_LOG=str(calls), RELEASE_METADATA=str(metadata),
+                         GH_LOG=str(calls),
                          GITHUB_OUTPUT=str(output), REQUESTED_PACKAGE_DIRECTORY="dependencies/packages",
-                         INSTALL_PACKAGES="false", RING_VERSION="v3.0.0-alpha.2",
-                         SAMPLERATE_ADAPTER_VERSION="v0.2.0-alpha.1",
-                         RELEASED_REPOSITORY="cpeter1207/librptadvsquelch",
-                         RELEASED_TAG="v0.1.0-alpha.2"),
+                         INSTALL_PACKAGES="false", RING_VERSION="v3.0.0-alpha3",
+                         SAMPLERATE_ADAPTER_VERSION="v0.2.0-alpha2",
+                         RELEASED_REPOSITORY=f"cpeter1207/{releases[0][0]}",
+                         RELEASED_TAG=releases[0][1]),
                 text=True, capture_output=True, check=False,
             )
-            self.assertEqual(calls.read_text().splitlines(), [
-                "api repos/cpeter1207/librptadvsquelch/releases/tags/v0.1.0-alpha.2"
-            ])
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls.read_text().splitlines() if calls.exists() else [], expected_calls)
             self.assertEqual({path.name for path in (directory / "dependencies/packages").iterdir()},
-                             {asset["name"] for asset in assets})
+                             filenames)
             self.assertIn("package_directory=", output.read_text())
             self.assertIn("if: inputs.released-repository == '' || inputs.install != 'false'", source)
 
