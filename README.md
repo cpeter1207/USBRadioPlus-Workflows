@@ -54,8 +54,10 @@ passes `APT_INDEX_DISPATCH_TOKEN` to the reusable release workflow. The token
 must be a fine-grained PAT with only `Contents: write` on
 `cpeter1207/USBRadioPlus`; store it as that secret in both source repositories.
 The workflow dispatches the released tag to USBRadioPlus, whose existing
-package publisher builds against those exact releases and publishes the signed
-Debian 13 index.
+package publisher downloads those exact release assets and refreshes the signed
+Debian 13 index without rebuilding USBRadioPlus or its candidate dependency pins.
+A ring refresh includes the explicitly paired sample-rate adapter release;
+a standalone adapter refresh includes only that adapter's packages.
 
 For a released functional library, the same publisher downloads only that
 library's digest-verified packages and refreshes the signed Debian 13 index
