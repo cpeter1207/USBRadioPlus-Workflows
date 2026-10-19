@@ -104,7 +104,7 @@ runs:
             librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev
           download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 \
             librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev
-          download_release rptadv-gpio-adapter v0.1.0-alpha.3 \
+          download_release rptadv-gpio-adapter v0.1.0-alpha.4 \
             librptadv-gpio-adapter1 librptadv-gpio-adapter-dev
           download_release rptadv-rnnoise-adapter v0.1.0-alpha.2 \
             librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev

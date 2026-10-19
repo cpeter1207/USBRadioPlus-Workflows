@@ -401,6 +401,10 @@ gh() {
             "download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3",
             source,
         )
+        self.assertIn(
+            "download_release rptadv-gpio-adapter v0.1.0-alpha.4",
+            source,
+        )
 
     def test_normal_download_route_uses_released_owner_and_provider_versions(self):
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
@@ -433,7 +437,7 @@ gh() {
                 "rptadv-samplerate-adapter v0.2.0-alpha1 librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev",
                 "rptadv-ffmpeg-adapter v0.1.0-alpha.2 librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev",
                 "rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
-                "rptadv-gpio-adapter v0.1.0-alpha.3 librptadv-gpio-adapter1 librptadv-gpio-adapter-dev",
+                "rptadv-gpio-adapter v0.1.0-alpha.4 librptadv-gpio-adapter1 librptadv-gpio-adapter-dev",
                 "rptadv-rnnoise-adapter v0.1.0-alpha.2 librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev",
                 "librptadvsquelch v0.1.0-alpha.2 librptadvsquelch2 librptadvsquelch-dev",
                 "librptadvctcss v0.1.0-alpha.2 librptadvctcss2 librptadvctcss-dev",
