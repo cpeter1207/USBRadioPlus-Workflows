@@ -547,7 +547,7 @@ gh() {
              ("librptadvsquelch2", "librptadvsquelch-dev")),
             ("librptadviax2", "v0.1.0-alpha5",
              ("librptadv-iax2-client1", "librptadv-iax2-client-dev")),
-            ("rpt_advanced", "v0.1.0-alpha9", (
+            ("rpt_advanced", "v0.1.0-alpha12", (
                 "rpt-advanced", "app-rpt-advanced",
                 "librptadv-product1", "librptadv-product-dev",
                 "librptadv-file-adapter1", "librptadv-file-adapter-dev",
@@ -556,6 +556,8 @@ gh() {
                 "librptadv-control-standalone-adapter1", "librptadv-control-standalone-adapter-dev",
                 "librptadv-resolver-adapter1", "librptadv-resolver-adapter-dev",
                 "librptadv-jitter-adapter1", "librptadv-jitter-adapter-dev",
+                "librptadv-gpiod-adapter1", "librptadv-gpiod-adapter-dev",
+                "librptadv-hwmon-adapter1", "librptadv-hwmon-adapter-dev",
             )),
         ]
         for release in releases:
