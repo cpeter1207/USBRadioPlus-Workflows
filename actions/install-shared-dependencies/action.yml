@@ -145,6 +145,8 @@ runs:
                 librptadv-control-standalone-adapter1 librptadv-control-standalone-adapter-dev
                 librptadv-resolver-adapter1 librptadv-resolver-adapter-dev
                 librptadv-jitter-adapter1 librptadv-jitter-adapter-dev
+                librptadv-gpiod-adapter1 librptadv-gpiod-adapter-dev
+                librptadv-hwmon-adapter1 librptadv-hwmon-adapter-dev
               )
               ;;
             *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
