@@ -230,13 +230,29 @@ gh() {
         # Model the Debian CLI: pagination works, but --slurp is unsupported.
         test "$#" -eq 3 || return 92
         test "$3" = 'repos/example/source/commits/tested-head/check-runs?per_page=100' || return 93
-        printf '%s\n' "$GATE_PAGES"
+        stage=checks
     else
         test "$#" -eq 2 || return 94
         test "$2" = 'repos/example/source/commits/merged-sha/pulls' || return 95
+        stage=metadata
+    fi
+    printf '%s\n' "$stage" >> "$API_LOG"
+    if test "$stage" = "$API_FAILURE_STAGE" &&
+        test "$(grep -c "^$stage$" "$API_LOG")" -le "$API_FAILURES"; then
+        if test "$API_FAILURE_MODE" = parse; then
+            printf '{'
+            return 0
+        fi
+        printf 'unexpected end of JSON input\n' >&2
+        return 1
+    fi
+    if test "$stage" = checks; then
+        printf '%s\n' "$GATE_PAGES"
+    else
         printf '%s\n' '[{"merged_at":"2026-09-13","base":{"ref":"main"},"merge_commit_sha":"merged-sha","head":{"sha":"tested-head"}}]'
     fi
 }
+sleep() { :; }
 '''
         quality = "quality / Required quality gate"
         container = "containers / Required container gate"
@@ -248,26 +264,56 @@ gh() {
         older = [check(1, quality, "failure"), check(2, container, "failure")]
         scenarios = (
             ("latest success", older,
-             [check(5, container, "success"), check(4, quality, "success")], True),
+             [check(5, container, "success"), check(4, quality, "success")], True,
+             "", 0, "transport", (1, 1)),
             ("latest quality failure", [check(1, quality, "success")],
-             [check(5, container, "success"), check(4, quality, "failure")], False),
+             [check(5, container, "success"), check(4, quality, "failure")], False,
+             "", 0, "transport", (1, 1)),
             ("latest container failure", [check(2, container, "success")],
-             [check(5, container, "failure"), check(4, quality, "success")], False),
+             [check(5, container, "failure"), check(4, quality, "success")], False,
+             "", 0, "transport", (1, 1)),
             ("incomplete quality", older,
-             [check(5, container, "success"), check(4, quality, "success", "in_progress")], False),
-            ("missing quality", [], [check(5, container, "success")], False),
-            ("missing container", [], [check(4, quality, "success")], False),
-            ("no checks", [], [], False),
+             [check(5, container, "success"), check(4, quality, "success", "in_progress")], False,
+             "", 0, "transport", (1, 1)),
+            ("missing quality", [], [check(5, container, "success")], False,
+             "", 0, "transport", (1, 1)),
+            ("missing container", [], [check(4, quality, "success")], False,
+             "", 0, "transport", (1, 1)),
+            ("no checks", [], [], False, "", 0, "transport", (1, 1)),
+            ("transient merged metadata transport", [],
+             [check(5, container, "success"), check(4, quality, "success")], True,
+             "metadata", 1, "transport", (2, 1)),
+            ("transient checks transport", [],
+             [check(5, container, "success"), check(4, quality, "success")], True,
+             "checks", 1, "transport", (1, 2)),
+            ("transient merged metadata parse", [],
+             [check(5, container, "success"), check(4, quality, "success")], True,
+             "metadata", 1, "parse", (2, 1)),
+            ("transient checks parse", [],
+             [check(5, container, "success"), check(4, quality, "success")], True,
+             "checks", 1, "parse", (1, 2)),
+            ("permanent metadata transport", [], [], False,
+             "metadata", 4, "transport", (3, 0)),
+            ("permanent checks parse", [], [], False,
+             "checks", 4, "parse", (1, 3)),
+            ("recovered API still rejects failed gate", [],
+             [check(5, container, "success"), check(4, quality, "failure")], False,
+             "checks", 1, "transport", (1, 2)),
         )
-        for name, first, second, expected in scenarios:
-            with self.subTest(name=name):
+        for name, first, second, expected, stage, failures, mode, calls in scenarios:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as work:
                 pages = "\n".join(json.dumps({"check_runs": page}) for page in (first, second))
+                log = Path(work) / "api.log"
                 result = subprocess.run(
                     ["bash", "-c", commands + script],
-                    env=dict(os.environ, GITHUB_REPOSITORY="example/source", GATE_PAGES=pages),
+                    env=dict(os.environ, GITHUB_REPOSITORY="example/source", GATE_PAGES=pages,
+                             API_LOG=str(log), API_FAILURE_STAGE=stage, API_FAILURES=str(failures),
+                             API_FAILURE_MODE=mode),
                     text=True, capture_output=True, check=False,
                 )
                 self.assertEqual(result.returncode == 0, expected, result.stderr)
+                observed = log.read_text().splitlines()
+                self.assertEqual((observed.count("metadata"), observed.count("checks")), calls)
 
 
     def test_rnnoise_package_install_retires_only_unowned_bootstrap_files(self):
