@@ -610,12 +610,10 @@ sleep() { :; }
             with self.subTest(repository=release[0]):
                 self.assert_index_only_downloads([release])
 
-    def test_index_only_ring_downloads_released_pair_despite_candidate_pins(self):
+    def test_index_only_ring_downloads_only_its_release_despite_candidate_pins(self):
         self.assert_index_only_downloads([
-            ("rate_adjusting_pcm_ring", "v3.0.0-alpha3",
+            ("rate_adjusting_pcm_ring", "v3.0.0-alpha4",
              ("librate-adjusting-pcm-ring3", "librate-adjusting-pcm-ring3-dev")),
-            ("rptadv-samplerate-adapter", "v0.2.0-alpha2",
-             ("librptadv-samplerate-adapter2", "librptadv-samplerate-adapter-dev")),
         ])
 
     def test_index_only_samplerate_downloads_only_its_release_despite_candidate_pins(self):

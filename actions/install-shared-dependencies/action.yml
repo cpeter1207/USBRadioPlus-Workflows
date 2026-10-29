@@ -69,7 +69,7 @@ runs:
           released_repository=${RELEASED_REPOSITORY:-}
           released_repository=${released_repository#cpeter1207/}
           # Product builds retain candidate pins. Index-only refreshes publish
-          # the requested release assets, including a ring's paired adapter.
+          # only the requested release; the existing repository retains dependencies.
           if [[ ( -z "$released_repository" || "${INSTALL_PACKAGES:-true}" != false ) &&
             "$repository" != "$released_repository" && -f .github/dependencies.json ]] &&
             jq -e --arg repository "$repository" 'any(.[]; .repository == $repository)' \
@@ -152,10 +152,6 @@ runs:
             *) echo "Unapproved released repository: $RELEASED_REPOSITORY" >&2; exit 2 ;;
           esac
           download_release "$RELEASED_REPOSITORY" "$RELEASED_TAG" "${packages[@]}"
-          if [[ "$RELEASED_REPOSITORY" == rate_adjusting_pcm_ring ]]; then
-            download_release rptadv-samplerate-adapter "$SAMPLERATE_ADAPTER_VERSION" \
-              librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev
-          fi
         fi
         if [[ "$INSTALL_PACKAGES" == true ]]; then
           apt-get update
