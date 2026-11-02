@@ -134,11 +134,21 @@ runs:
             librptadvdtmf) packages=(librptadvdtmf1 librptadvdtmf-dev) ;;
             librptadvtemplate) packages=(librptadvtemplate1 librptadvtemplate-dev) ;;
             librptadvschedule) packages=(librptadvschedule1 librptadvschedule-dev) ;;
-            librptadviax2) packages=(librptadv-iax2-client1 librptadv-iax2-client-dev) ;;
+            librptadviax2) packages=(librptadv-iax2-client2 librptadv-iax2-client-dev) ;;
+            librptadvecholink) packages=(librptadvecholink1 librptadvecholink-dev) ;;
+            rptadv-codec-adapters)
+              packages=(
+                librptadv-codec-dev librptadv-codec-g7111 librptadv-codec-pcm1
+                librptadv-codec-gsm1 librptadv-codec-opus1 librptadv-codec-speex1
+                librptadv-codec-spandsp1 librptadv-codec-bcg7291 librptadv-codec-ilbc1
+                librptadv-codec-dialogic1 librptadv-codec-ffmpeg1
+                librptadv-bcg729-gpl2-0 librptadv-ilbc2-2 librptadv-dialogic1
+              )
+              ;;
             rpt_advanced)
               packages=(
                 rpt-advanced app-rpt-advanced
-                librptadv-product1 librptadv-product-dev
+                librptadv-product2 librptadv-product-dev
                 librptadv-file-adapter1 librptadv-file-adapter-dev
                 librptadv-speech-adapter1 librptadv-speech-adapter-dev
                 librptadv-control-asterisk-adapter1 librptadv-control-asterisk-adapter-dev

@@ -591,11 +591,20 @@ sleep() { :; }
         releases = [
             ("librptadvsquelch", "v0.1.0-alpha.2",
              ("librptadvsquelch2", "librptadvsquelch-dev")),
-            ("librptadviax2", "v0.1.0-alpha5",
-             ("librptadv-iax2-client1", "librptadv-iax2-client-dev")),
-            ("rpt_advanced", "v0.1.0-alpha12", (
+            ("librptadviax2", "v0.1.0-alpha10",
+             ("librptadv-iax2-client2", "librptadv-iax2-client-dev")),
+            ("librptadvecholink", "v0.1.0-alpha1",
+             ("librptadvecholink1", "librptadvecholink-dev")),
+            ("rptadv-codec-adapters", "v0.1.0-alpha1", (
+                "librptadv-codec-dev", "librptadv-codec-g7111", "librptadv-codec-pcm1",
+                "librptadv-codec-gsm1", "librptadv-codec-opus1", "librptadv-codec-speex1",
+                "librptadv-codec-spandsp1", "librptadv-codec-bcg7291", "librptadv-codec-ilbc1",
+                "librptadv-codec-dialogic1", "librptadv-codec-ffmpeg1",
+                "librptadv-bcg729-gpl2-0", "librptadv-ilbc2-2", "librptadv-dialogic1",
+            )),
+            ("rpt_advanced", "v0.1.0-alpha18", (
                 "rpt-advanced", "app-rpt-advanced",
-                "librptadv-product1", "librptadv-product-dev",
+                "librptadv-product2", "librptadv-product-dev",
                 "librptadv-file-adapter1", "librptadv-file-adapter-dev",
                 "librptadv-speech-adapter1", "librptadv-speech-adapter-dev",
                 "librptadv-control-asterisk-adapter1", "librptadv-control-asterisk-adapter-dev",
@@ -758,7 +767,7 @@ sleep() { :; }
                 "librptadvsignaling", "librptadvtone", "librptadvmorse",
                 "librptadvdtmf", "librptadvtemplate", "librptadvschedule",
                 "librptadvradio", "rptadv-gpio-adapter",
-                "librptadviax2", "rpt_advanced",
+                "librptadviax2", "rpt_advanced", "librptadvecholink", "rptadv-codec-adapters",
             ):
                 with self.subTest(repository=repository):
                     environment["PACKAGE_REPOSITORY"] = f"cpeter1207/{repository}"
