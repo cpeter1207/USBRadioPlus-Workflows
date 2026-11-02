@@ -66,6 +66,18 @@ dependencies and existing consumer packages remain in the preserved repository
 pool; the published-repository verification job still checks the consumers.
 Radio-core and GPIO adapter owner releases use this same index-only route.
 
+EchoLink, the codec providers and their three companion runtimes use that
+route too. IAX releases select client ABI 2; controller releases select product
+ABI 2. The USBRadioPlus package caller also accepts `released_repository` and
+`released_tag` for a manual refresh of an already published release, using the
+existing signing key and downloader without a cross-repository dispatch token:
+
+```sh
+gh workflow run packages.yml --repo cpeter1207/USBRadioPlus --ref main \
+  -f released_repository=cpeter1207/librptadvecholink \
+  -f released_tag=v0.1.0-alpha1
+```
+
 Automatic quality and release work runs on native Debian 13 only: amd64
 collects coverage, while amd64 and arm64 both run tests, builds, and staged
 installation checks. Debian 12 is aspirational and never runs automatically.
