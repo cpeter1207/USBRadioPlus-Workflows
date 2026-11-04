@@ -73,6 +73,79 @@ class WorkflowContracts(unittest.TestCase):
         self.assertIn("../libusbradioplus-product-dev_*.deb", source)
         self.assertNotIn("dpkg -i ../usbradioplus_*.deb", source)
 
+    def test_quality_installer_resolves_the_exact_candidate_tuner(self):
+        """Use APT's real resolver with local candidates and an empty status database."""
+        source = (ROOT / ".github/workflows/quality.yml").read_text()
+        command = re.search(
+            r"DEBIAN_FRONTEND=noninteractive apt-get install -y .*?(?=\n          module=)",
+            source,
+            re.DOTALL,
+        ).group(0)
+        version = "99.0-1.deb13"
+        packages = {
+            "usbradioplus": (
+                f"libusbradioplus-product1 (= {version}), "
+                f"usbradioplus-tune (= {version})"
+            ),
+            "usbradioplus-tune": "",
+            "libusbradioplus-product1": "",
+            "libusbradioplus-product-dev": f"libusbradioplus-product1 (= {version})",
+        }
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            checkout = directory / "source"
+            checkout.mkdir()
+            for package, dependencies in packages.items():
+                control = directory / package / "DEBIAN/control"
+                control.parent.mkdir(parents=True)
+                control.write_text(
+                    f"Package: {package}\nVersion: {version}\nArchitecture: all\n"
+                    "Maintainer: Test <test@example.org>\nDescription: Candidate fixture\n"
+                    + (f"Depends: {dependencies}\n" if dependencies else "")
+                )
+                subprocess.run(
+                    [
+                        "dpkg-deb",
+                        "--build",
+                        str(control.parent.parent),
+                        str(directory / f"{package}_{version}_all.deb"),
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
+            status = directory / "status"
+            status.touch()
+            sources = directory / "sources.list"
+            sources.touch()
+            source_parts = directory / "sources.list.d"
+            source_parts.mkdir()
+            script = (
+                """
+apt-get() {
+    command apt-get --simulate -o "Dir::State::status=$APT_STATUS" \\
+      -o "Dir::Etc::sourcelist=$APT_SOURCES" \\
+      -o "Dir::Etc::sourceparts=$APT_SOURCE_PARTS" "$@"
+}
+"""
+                + command
+            )
+            result = subprocess.run(
+                ["bash", "-c", script],
+                cwd=checkout,
+                env=dict(
+                    os.environ,
+                    APT_STATUS=str(status),
+                    APT_SOURCES=str(sources),
+                    APT_SOURCE_PARTS=str(source_parts),
+                ),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for package in packages:
+                self.assertRegex(result.stdout, rf"(?m)^Inst {re.escape(package)} ")
+
     def test_release_stages_and_checks_split_product_packages(self):
         source = (ROOT / ".github/workflows/packages.yml").read_text()
         build = source.split("      - name: Build USBRadioPlus", 1)[1].split(
@@ -90,6 +163,63 @@ class WorkflowContracts(unittest.TestCase):
             build,
         )
         self.assertIn('libusbradioplus-product1 (= $product_version)', build)
+
+    def test_release_artifact_staging_keeps_the_tuner_and_its_optional_symbols(self):
+        source = (ROOT / ".github/workflows/packages.yml").read_text()
+        staging = source.split("          mkdir -p package-output\n", 1)[1].split(
+            "          printf 'suite=", 1
+        )[0]
+        staging = "mkdir -p package-output\n" + textwrap.dedent(staging)
+        with tempfile.TemporaryDirectory() as work:
+            directory = Path(work)
+            checkout = directory / "source"
+            checkout.mkdir()
+            expected = {
+                f"{package}_99.0-1.deb13_amd64.deb"
+                for package in (
+                    "usbradioplus",
+                    "usbradioplus-tune",
+                    "libusbradioplus-product1",
+                    "libusbradioplus-product-dev",
+                    "usbradioplus-dbgsym",
+                    "usbradioplus-tune-dbgsym",
+                    "libusbradioplus-product1-dbgsym",
+                )
+            }
+            for name in expected:
+                (directory / name).write_text(name)
+            for name in ("rnnoise", "shared"):
+                (directory / name).mkdir()
+            for name in ("librnnoise0", "librnnoise-dev"):
+                filename = f"{name}_0.2-1_amd64.deb"
+                (directory / "rnnoise" / filename).write_text(filename)
+                expected.add(filename)
+            shared = "librptadvradio4_0.1-1_amd64.deb"
+            (directory / "shared" / shared).write_text(shared)
+            expected.add(shared)
+            script = (
+                staging.replace("${{ matrix.debian }}", "13")
+                .replace(
+                    "${{ steps.rnnoise.outputs.package-directory }}",
+                    str(directory / "rnnoise"),
+                )
+                .replace(
+                    "${{ steps.shared.outputs.package-directory }}",
+                    str(directory / "shared"),
+                )
+            )
+            result = subprocess.run(
+                ["bash", "-ec", script],
+                cwd=checkout,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            staged = checkout / "package-output"
+            self.assertEqual({path.name for path in staged.iterdir()}, expected)
+            for path in staged.iterdir():
+                self.assertEqual(path.read_text(), path.name)
 
     def test_shared_release_refresh_does_not_build_consumer_packages(self):
         source = (ROOT / ".github/workflows/packages.yml").read_text()
@@ -379,6 +509,8 @@ sleep() { :; }
             "/incoming/libusbradioplus-product1-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/usbradioplus_0.1.0~alpha18-1.deb13_amd64.deb",
             "/incoming/usbradioplus-dbgsym_0.1.0~alpha18-1.deb13_amd64.deb",
+            "/incoming/usbradioplus-tune_0.1.0~alpha27-1.deb13_amd64.deb",
+            "/incoming/usbradioplus-tune-dbgsym_0.1.0~alpha27-1.deb13_arm64.deb",
             "/incoming/librate-adjusting-pcm-ring1_1.0.1-1.deb13_amd64.deb",
             "/incoming/librate-adjusting-pcm-ring3_3.0.0.alpha2-1_amd64.deb",
             "/incoming/librptadv-portaudio-alsa-adapter1_0.1.0.alpha2-1_amd64.deb",
