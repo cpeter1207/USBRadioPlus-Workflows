@@ -169,7 +169,8 @@ jobs:
           dpkg-buildpackage -b -us -uc
           lintian --fail-on error ../usbradioplus_*.changes
           mkdir -p package-output
-          cp ../usbradioplus_*.deb ../libusbradioplus-product1_*.deb \
+          cp ../usbradioplus_*.deb ../usbradioplus-tune_*.deb \
+            ../libusbradioplus-product1_*.deb \
             ../libusbradioplus-product-dev_*.deb package-output/
           cp "${{ steps.rnnoise.outputs.package-directory }}"/librnnoise0_*.deb \
             "${{ steps.rnnoise.outputs.package-directory }}"/librnnoise-dev_*.deb package-output/
@@ -177,6 +178,7 @@ jobs:
             cp "${{ steps.shared.outputs.package-directory }}"/*.deb package-output/
           fi
           find .. -maxdepth 1 \( -name 'usbradioplus-dbgsym_*.deb' \
+            -o -name 'usbradioplus-tune-dbgsym_*.deb' \
             -o -name 'libusbradioplus-product1-dbgsym_*.deb' \) \
             -exec cp -t package-output {} +
           printf 'suite=%s\narchitecture=%s\nasl3_build=%s\n' \
@@ -185,6 +187,7 @@ jobs:
           test "$(dpkg-deb -f ../usbradioplus_*.deb Depends | \
             grep -c "asl3-asterisk (= $asl_version)")" = 1
           test "$(dpkg-deb -f ../usbradioplus_*.deb Package)" = usbradioplus
+          test "$(dpkg-deb -f ../usbradioplus-tune_*.deb Package)" = usbradioplus-tune
           test "$(dpkg-deb -f ../libusbradioplus-product1_*.deb Package)" = libusbradioplus-product1
           test "$(dpkg-deb -f ../libusbradioplus-product-dev_*.deb Package)" = libusbradioplus-product-dev
           product_version=$(dpkg-deb -f ../libusbradioplus-product1_*.deb Version)
