@@ -552,8 +552,8 @@ sleep() { :; }
             for package, version in (
                 ("librate-adjusting-pcm-ring3", "3.0.0.alpha2-1"),
                 ("librptadv-samplerate-adapter2", "0.2.0.alpha1-1"),
-                ("librptadvradio4", "0.1.0.alpha5-1"),
-                ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha3-1"),
+                ("librptadvradio4", "0.1.0.alpha9-1"),
+                ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha4-1"),
                 ("librptadv-rnnoise-adapter1", "0.1.0.alpha2-1"),
                 ("librnnoise0", "0.2-1"),
             ):
@@ -576,7 +576,7 @@ sleep() { :; }
     def test_installs_the_adapter_release_required_by_usbradioplus(self):
         source = (ROOT / "actions/install-shared-dependencies/action.yml").read_text()
         self.assertIn(
-            "download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.3",
+            "download_release rptadv-portaudio-alsa-adapter v0.2.0-alpha.4",
             source,
         )
         self.assertIn(
@@ -611,10 +611,10 @@ sleep() { :; }
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(log.read_text().splitlines(), [
                 "rate_adjusting_pcm_ring v3.0.0-alpha2 librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev",
-                "librptadvradio v0.1.0-alpha.8 librptadvradio4 librptadvradio-dev",
+                "librptadvradio v0.1.0-alpha.9 librptadvradio4 librptadvradio-dev",
                 "rptadv-samplerate-adapter v0.2.0-alpha1 librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev",
                 "rptadv-ffmpeg-adapter v0.1.0-alpha.2 librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev",
-                "rptadv-portaudio-alsa-adapter v0.2.0-alpha.3 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
+                "rptadv-portaudio-alsa-adapter v0.2.0-alpha.4 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
                 "rptadv-gpio-adapter v0.1.0-alpha.4 librptadv-gpio-adapter1 librptadv-gpio-adapter-dev",
                 "rptadv-rnnoise-adapter v0.1.0-alpha.2 librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev",
                 "librptadvsquelch v0.1.0-alpha.2 librptadvsquelch2 librptadvsquelch-dev",
@@ -679,6 +679,8 @@ sleep() { :; }
         with tempfile.TemporaryDirectory() as work:
             log = Path(work) / "download.log"
             releases = [
+                ("rptadv-portaudio-alsa-adapter", "v0.2.0-alpha.4",
+                 ("librptadv-portaudio-alsa-adapter2", "librptadv-portaudio-alsa-adapter-dev")),
                 ("librptadvremote", "v0.1.0-alpha.1",
                  ("librptadvremote1", "librptadvremote-dev")),
                 ("rptadv-hamlib-adapter", "v0.1.0-alpha.1",
@@ -727,6 +729,8 @@ sleep() { :; }
 
     def test_index_only_downloads_only_requested_release(self):
         releases = [
+            ("rptadv-portaudio-alsa-adapter", "v0.2.0-alpha.4",
+             ("librptadv-portaudio-alsa-adapter2", "librptadv-portaudio-alsa-adapter-dev")),
             ("librptadvsquelch", "v0.1.0-alpha.2",
              ("librptadvsquelch2", "librptadvsquelch-dev")),
             ("librptadviax2", "v0.1.0-alpha10",
@@ -906,7 +910,7 @@ sleep() { :; }
                 "librptadvdtmf", "librptadvtemplate", "librptadvschedule",
                 "librptadvradio", "rptadv-gpio-adapter",
                 "librptadviax2", "rpt_advanced", "librptadvecholink", "rptadv-codec-adapters",
-                "librptadvremote", "rptadv-hamlib-adapter",
+                "librptadvremote", "rptadv-hamlib-adapter", "rptadv-portaudio-alsa-adapter",
             ):
                 with self.subTest(repository=repository):
                     environment["PACKAGE_REPOSITORY"] = f"cpeter1207/{repository}"

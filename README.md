@@ -43,7 +43,8 @@ before building artifacts, and never repeat the production coverage gate.
 Shared adapters are installed from versioned releases after checking GitHub's
 SHA-256 asset digests. The module uses ring ABI 3 from v3.0.0-alpha2 and
 sample-rate adapter ABI 2 from v0.2.0-alpha1. Its radio ABI 4 and GPIO ABI 1
-dependencies are pinned to v0.1.0-alpha.8 and v0.1.0-alpha.4. Radio's squelch
+dependencies are pinned to v0.1.0-alpha.9 and v0.1.0-alpha.4. PortAudio/ALSA
+uses ABI 2 from v0.2.0-alpha.4. Radio's squelch
 and CTCSS providers use ABI 2 (`librptadvsquelch2` and `librptadvctcss2`,
 SONAME `.so.2`) from v0.1.0-alpha.2; DCS and signaling remain ABI 1 from
 v0.1.0-alpha.1. Existing ABI 1 index entries remain published.
@@ -67,7 +68,8 @@ library's digest-verified packages and refreshes the signed Debian 13 index
 without building new USBRadioPlus integration or product packages. Other
 dependencies and existing consumer packages remain in the preserved repository
 pool; the published-repository verification job still checks the consumers.
-Radio-core and GPIO adapter owner releases use this same index-only route.
+Radio-core, PortAudio/ALSA and GPIO adapter owner releases use this same
+index-only route.
 
 EchoLink, the codec providers and their three companion runtimes use that
 route too. IAX releases select client ABI 2; controller releases select product
