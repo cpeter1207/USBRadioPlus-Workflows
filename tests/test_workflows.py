@@ -621,6 +621,8 @@ sleep() { :; }
                 "librptadvctcss v0.1.0-alpha.2 librptadvctcss2 librptadvctcss-dev",
                 "librptadvdcs v0.1.0-alpha.1 librptadvdcs1 librptadvdcs-dev",
                 "librptadvsignaling v0.1.0-alpha.1 librptadvsignaling1 librptadvsignaling-dev",
+                "librptadvremote v0.1.0-alpha.1 librptadvremote1 librptadvremote-dev",
+                "rptadv-hamlib-adapter v0.1.0-alpha.1 librptadv-hamlib-adapter1 librptadv-hamlib-adapter-dev",
             ])
         workflow = (ROOT / ".github/workflows/packages.yml").read_text()
         self.assertIn("default: v3.0.0-alpha2", workflow)
@@ -677,6 +679,10 @@ sleep() { :; }
         with tempfile.TemporaryDirectory() as work:
             log = Path(work) / "download.log"
             releases = [
+                ("librptadvremote", "v0.1.0-alpha.1",
+                 ("librptadvremote1", "librptadvremote-dev")),
+                ("rptadv-hamlib-adapter", "v0.1.0-alpha.1",
+                 ("librptadv-hamlib-adapter1", "librptadv-hamlib-adapter-dev")),
                 ("librptadvsquelch", "v0.1.0-alpha.2",
                  ("librptadvsquelch2", "librptadvsquelch-dev")),
                 ("librptadvctcss", "v0.1.0-alpha.2",
@@ -900,6 +906,7 @@ sleep() { :; }
                 "librptadvdtmf", "librptadvtemplate", "librptadvschedule",
                 "librptadvradio", "rptadv-gpio-adapter",
                 "librptadviax2", "rpt_advanced", "librptadvecholink", "rptadv-codec-adapters",
+                "librptadvremote", "rptadv-hamlib-adapter",
             ):
                 with self.subTest(repository=repository):
                     environment["PACKAGE_REPOSITORY"] = f"cpeter1207/{repository}"

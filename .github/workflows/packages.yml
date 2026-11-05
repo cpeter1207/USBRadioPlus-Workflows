@@ -207,7 +207,7 @@ jobs:
           for library in "$ring_package" librptadvradio4 \
             "$samplerate_package" librptadv-ffmpeg-adapter1 \
             librptadv-portaudio-alsa-adapter2 librptadv-gpio-adapter1 \
-            librptadv-rnnoise-adapter1; do
+            librptadv-rnnoise-adapter1 librptadvremote1 librptadv-hamlib-adapter1; do
             dpkg-deb -f ../libusbradioplus-product1_*.deb Depends | grep -F "$library"
           done
       - name: Stage released shared packages for signed index
