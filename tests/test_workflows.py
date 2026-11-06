@@ -514,6 +514,10 @@ sleep() { :; }
             "/incoming/librate-adjusting-pcm-ring1_1.0.1-1.deb13_amd64.deb",
             "/incoming/librate-adjusting-pcm-ring3_3.0.0.alpha2-1_amd64.deb",
             "/incoming/librptadv-portaudio-alsa-adapter1_0.1.0.alpha2-1_amd64.deb",
+            "/incoming/librptadv-ffmpeg-adapter1_0.1.0.alpha2-1_amd64.deb",
+            "/incoming/librptadv-ffmpeg-adapter-dev_0.1.0.alpha2-1_arm64.deb",
+            "/incoming/librptadv-rnnoise-adapter1_0.1.0.alpha2-1_amd64.deb",
+            "/incoming/librptadv-rnnoise-adapter-dev_0.1.0.alpha2-1_arm64.deb",
             "/incoming/librnnoise0_0.2-1_amd64.deb",
             "/incoming/librnnoise-dev_0.2-1_arm64.deb",
             "/incoming/rpt-advanced_0.1.0.alpha9-1_arm64.deb",
@@ -729,6 +733,12 @@ sleep() { :; }
 
     def test_index_only_downloads_only_requested_release(self):
         releases = [
+            ("rptadv-ffmpeg-adapter", "v0.1.0-alpha.2",
+             ("librptadv-ffmpeg-adapter1", "librptadv-ffmpeg-adapter-dev")),
+            ("rptadv-rnnoise-adapter", "v0.1.0-alpha.2", (
+                "librptadv-rnnoise-adapter1", "librptadv-rnnoise-adapter-dev",
+                "librnnoise0", "librnnoise-dev",
+            )),
             ("rptadv-portaudio-alsa-adapter", "v0.2.0-alpha.4",
              ("librptadv-portaudio-alsa-adapter2", "librptadv-portaudio-alsa-adapter-dev")),
             ("librptadvsquelch", "v0.1.0-alpha.2",
@@ -909,6 +919,7 @@ sleep() { :; }
                 "librptadvsignaling", "librptadvtone", "librptadvmorse",
                 "librptadvdtmf", "librptadvtemplate", "librptadvschedule",
                 "librptadvradio", "rptadv-gpio-adapter",
+                "rptadv-ffmpeg-adapter", "rptadv-rnnoise-adapter",
                 "librptadviax2", "rpt_advanced", "librptadvecholink", "rptadv-codec-adapters",
                 "librptadvremote", "rptadv-hamlib-adapter", "rptadv-portaudio-alsa-adapter",
             ):
