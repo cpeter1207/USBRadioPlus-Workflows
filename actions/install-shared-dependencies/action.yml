@@ -130,6 +130,8 @@ runs:
             librptadvremote) packages=(librptadvremote1 librptadvremote-dev) ;;
             rptadv-hamlib-adapter) packages=(librptadv-hamlib-adapter1 librptadv-hamlib-adapter-dev) ;;
             rptadv-portaudio-alsa-adapter) packages=(librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev) ;;
+            rptadv-ffmpeg-adapter) packages=(librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev) ;;
+            rptadv-rnnoise-adapter) packages=(librptadv-rnnoise-adapter1 librptadv-rnnoise-adapter-dev librnnoise0 librnnoise-dev) ;;
             rptadv-gpio-adapter) packages=(librptadv-gpio-adapter1 librptadv-gpio-adapter-dev) ;;
             librptadvsquelch) packages=(librptadvsquelch2 librptadvsquelch-dev) ;;
             librptadvctcss) packages=(librptadvctcss2 librptadvctcss-dev) ;;

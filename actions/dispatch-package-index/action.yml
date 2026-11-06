@@ -33,6 +33,7 @@ runs:
           cpeter1207/librptadvradio|cpeter1207/rptadv-gpio-adapter|\
           cpeter1207/librptadvremote|cpeter1207/rptadv-hamlib-adapter|\
           cpeter1207/rptadv-portaudio-alsa-adapter|\
+          cpeter1207/rptadv-ffmpeg-adapter|cpeter1207/rptadv-rnnoise-adapter|\
           cpeter1207/librptadvsquelch|cpeter1207/librptadvctcss|\
           cpeter1207/librptadvdcs|cpeter1207/librptadvsignaling|\
           cpeter1207/librptadvtone|cpeter1207/librptadvmorse|\
