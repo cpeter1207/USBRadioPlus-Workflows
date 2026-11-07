@@ -97,7 +97,7 @@ runs:
           # Keep the channel and its independently released providers ABI-matched.
           download_release rate_adjusting_pcm_ring "$RING_VERSION" \
             librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev
-          download_release librptadvradio v0.1.0-alpha.9 librptadvradio4 librptadvradio-dev
+          download_release librptadvradio v0.1.0-alpha.10 librptadvradio5 librptadvradio-dev
           download_release rptadv-samplerate-adapter "$SAMPLERATE_ADAPTER_VERSION" \
             librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev
           download_release rptadv-ffmpeg-adapter v0.1.0-alpha.2 \
@@ -126,7 +126,7 @@ runs:
           case "$RELEASED_REPOSITORY" in
             rate_adjusting_pcm_ring) packages=(librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev) ;;
             rptadv-samplerate-adapter) packages=(librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev) ;;
-            librptadvradio) packages=(librptadvradio4 librptadvradio-dev) ;;
+            librptadvradio) packages=(librptadvradio5 librptadvradio-dev) ;;
             librptadvremote) packages=(librptadvremote1 librptadvremote-dev) ;;
             rptadv-hamlib-adapter) packages=(librptadv-hamlib-adapter1 librptadv-hamlib-adapter-dev) ;;
             rptadv-portaudio-alsa-adapter) packages=(librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev) ;;
@@ -180,8 +180,8 @@ runs:
             rptadv_portaudio_alsa_adapter rptadv_gpio_adapter rptadv_rnnoise_adapter \
             rptadvsquelch rptadvctcss rptadvdcs rptadvsignaling \
             rptadvremote rptadv_hamlib_adapter
-          test "$(pkg-config --variable=abi_version rptadvradio)" = 4
-          test -f "$(pkg-config --variable=libdir rptadvradio)/librptadvradio.so.4"
+          test "$(pkg-config --variable=abi_version rptadvradio)" = 5
+          test -f "$(pkg-config --variable=libdir rptadvradio)/librptadvradio.so.5"
           test -f "$(pkg-config --variable=libdir rptadv_gpio_adapter)/librptadv_gpio_adapter.so.1"
           for provider in rptadvsquelch rptadvctcss rptadvdcs rptadvsignaling rptadvremote rptadv_hamlib_adapter; do
             abi=1

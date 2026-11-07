@@ -546,7 +546,7 @@ sleep() { :; }
         self.assertNotIn("librate-adjusting-pcm-ring1", source)
         self.assertIn("default: v3.0.0-alpha2", source)
         self.assertIn("default: v0.2.0-alpha1", source)
-        self.assertIn("librptadvradio4", source)
+        self.assertIn("librptadvradio5", source)
         self.assertIn("librptadv-portaudio-alsa-adapter2", source)
         self.assertIn("librptadv-rnnoise-adapter1", source)
         self.assertIn("librnnoise0 librnnoise-dev", source)
@@ -556,7 +556,7 @@ sleep() { :; }
             for package, version in (
                 ("librate-adjusting-pcm-ring3", "3.0.0.alpha2-1"),
                 ("librptadv-samplerate-adapter2", "0.2.0.alpha1-1"),
-                ("librptadvradio4", "0.1.0.alpha9-1"),
+                ("librptadvradio5", "0.1.0.alpha10-1"),
                 ("librptadv-portaudio-alsa-adapter2", "0.2.0.alpha4-1"),
                 ("librptadv-rnnoise-adapter1", "0.1.0.alpha2-1"),
                 ("librnnoise0", "0.2-1"),
@@ -615,7 +615,7 @@ sleep() { :; }
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(log.read_text().splitlines(), [
                 "rate_adjusting_pcm_ring v3.0.0-alpha2 librate-adjusting-pcm-ring3 librate-adjusting-pcm-ring3-dev",
-                "librptadvradio v0.1.0-alpha.9 librptadvradio4 librptadvradio-dev",
+                "librptadvradio v0.1.0-alpha.10 librptadvradio5 librptadvradio-dev",
                 "rptadv-samplerate-adapter v0.2.0-alpha1 librptadv-samplerate-adapter2 librptadv-samplerate-adapter-dev",
                 "rptadv-ffmpeg-adapter v0.1.0-alpha.2 librptadv-ffmpeg-adapter1 librptadv-ffmpeg-adapter-dev",
                 "rptadv-portaudio-alsa-adapter v0.2.0-alpha.4 librptadv-portaudio-alsa-adapter2 librptadv-portaudio-alsa-adapter-dev",
@@ -700,8 +700,8 @@ sleep() { :; }
                     "dcs", "signaling", "tone", "morse", "dtmf", "template", "schedule",
                 )
             ] + [
-                ("librptadvradio", "v0.1.0-alpha.8",
-                 ("librptadvradio4", "librptadvradio-dev")),
+                ("librptadvradio", "v0.1.0-alpha.10",
+                 ("librptadvradio5", "librptadvradio-dev")),
                 ("rptadv-gpio-adapter", "v0.1.0-alpha.3",
                  ("librptadv-gpio-adapter1", "librptadv-gpio-adapter-dev")),
             ]

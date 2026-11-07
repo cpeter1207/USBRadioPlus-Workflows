@@ -204,7 +204,7 @@ jobs:
             ring_package=librate-adjusting-pcm-ring2
             samplerate_package=librptadv-samplerate-adapter1
           fi
-          for library in "$ring_package" librptadvradio4 \
+          for library in "$ring_package" librptadvradio5 \
             "$samplerate_package" librptadv-ffmpeg-adapter1 \
             librptadv-portaudio-alsa-adapter2 librptadv-gpio-adapter1 \
             librptadv-rnnoise-adapter1 librptadvremote1 librptadv-hamlib-adapter1; do
