@@ -63,6 +63,10 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Verify baseline ASL3 runtime
         run: test "$(dpkg-query -W -f='${Version}' asl3-asterisk)" = '2:22.9.0+asl3-3.9.3-1.deb13'
+      - name: Install FFmpeg CLI for output measurements
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg
       - name: Run platform-specific verification
         run: |
           if [ '${{ matrix.verification }}' = coverage ]; then
