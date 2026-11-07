@@ -42,8 +42,8 @@ before building artifacts, and never repeat the production coverage gate.
 
 Shared adapters are installed from versioned releases after checking GitHub's
 SHA-256 asset digests. The module uses ring ABI 3 from v3.0.0-alpha2 and
-sample-rate adapter ABI 2 from v0.2.0-alpha1. Its radio ABI 4 and GPIO ABI 1
-dependencies are pinned to v0.1.0-alpha.9 and v0.1.0-alpha.4. PortAudio/ALSA
+sample-rate adapter ABI 2 from v0.2.0-alpha1. Its radio ABI 5 and GPIO ABI 1
+dependencies are pinned to v0.1.0-alpha.10 and v0.1.0-alpha.4. PortAudio/ALSA
 uses ABI 2 from v0.2.0-alpha.4. Radio's squelch
 and CTCSS providers use ABI 2 (`librptadvsquelch2` and `librptadvctcss2`,
 SONAME `.so.2`) from v0.1.0-alpha.2; DCS and signaling remain ABI 1 from
